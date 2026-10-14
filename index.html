@@ -184,7 +184,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .adj{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .adj button{height:56px;font-size:22px;letter-spacing:.02em}
 [data-theme="night"] .adj button{background:transparent}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
 .stat{background:var(--surface);border-radius:var(--r);padding:12px 18px;display:flex;flex-direction:column;gap:4px;min-width:0}
 [data-theme="night"] .stat{background:transparent;border-radius:0;border-top:1px solid var(--line);padding-left:0}
 [data-theme="night"] .stat+.stat{border-left:1px solid var(--line);padding-left:24px}
@@ -201,6 +201,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 #stop:not(:disabled){background:var(--alert);color:var(--alert-ink);border-color:transparent}
 .mach{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;justify-content:space-between}
 .mach b{font:600 12px var(--fd);letter-spacing:.12em;text-transform:uppercase}
+#hrcon.on #hrlbl{font-variant-numeric:tabular-nums;min-width:3.2ch}
 .overall{height:5px}
 .overall i{background:var(--primary)}
 
@@ -250,6 +251,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div class="tools">
       <button class="icon" id="themebtn" title="Switch light / dark" aria-label="Switch light or dark theme"><svg viewBox="0 0 24 24"><path id="themeic" d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></button>
       <button class="pill" id="btcon" title="Connect treadmill (Bluetooth)" aria-label="Connect treadmill via Bluetooth"><svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg><span id="btlbl">Treadmill</span></button>
+      <button class="pill" id="hrcon" title="Connect heart-rate strap (Bluetooth)" aria-label="Connect heart-rate strap via Bluetooth"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 00-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 000-7.8z"/></svg><span id="hrlbl">Heart rate</span></button>
       <button class="icon" id="alertbtn" title="Alert settings" aria-label="Alert settings"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 003.4 0"/></svg></button>
       <span id="clock"></span>
     </div>
@@ -323,6 +325,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="stat"><span class="lbl">Elapsed</span><b id="el">0:00</b></div>
       <div class="stat"><span class="lbl">Distance</span><b><span id="dist">0.00</span><small>km</small></b></div>
       <div class="stat"><span class="lbl">Elevation gain</span><b>+<span id="vert">0</span><small>m</small></b></div>
+      <div class="stat"><span class="lbl">Heart rate</span><b><span id="hrv">–</span><small>bpm</small></b></div>
       <div class="stat"><span class="lbl">Remaining</span><b id="rem">0:00</b></div>
     </div>
     <div class="bottom">
@@ -345,7 +348,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="card"><h2 class="lbl">Planned vs actual</h2><div id="dchart"></div></div>
       <div class="card">
         <h2 class="lbl">Export</h2>
-        <div class="muted">Download or copy the log, then run <code>tcoach fit log.json --out run.fit</code> (add <code>--hr-csv</code> for heart rate) and upload to intervals.icu.</div>
+        <div class="muted">Download or copy the log, then run <code>tcoach fit log.json --out run.fit</code> (heart rate is included automatically) and upload to intervals.icu.</div>
         <pre class="log" id="logout"></pre>
         <div class="muted" id="copied"></div>
         <div class="export"><button class="pri" id="dl">Download log</button><button id="copy">Copy</button><button class="ghost" id="again">New</button></div>
@@ -454,6 +457,27 @@ const BLE={dev:null,cp:null,live:{},q:Promise.resolve(),wait:null,cur:{s:0,i:0},
  status(v){if(!window.S||!S)return;const op=v.getUint8(0);
   if(op===8&&v.byteLength>=3){const x=v.getUint16(1,true)/100;if(Math.abs(x-S.speed)>.05){S.speed=x;logEv()}}
   if(op===9&&v.byteLength>=3){const x=v.getInt16(1,true)/10;if(Math.abs(x-S.incline)>.05){S.incline=x;logEv()}}}};
+// ---- heart-rate strap (standard BLE Heart Rate service 0x180D / 0x2A37)
+const HR={dev:null,bpm:null,t:0,tries:0,want:false,
+ async connect(){
+  try{
+   if(!navigator.bluetooth)throw Error("Web Bluetooth not available in this browser");
+   this.dev=await navigator.bluetooth.requestDevice({filters:[{services:[U(0x180d)]}]});
+   this.dev.addEventListener("gattserverdisconnected",()=>this.lost());
+   this.want=true;this.tries=0;await this.hook();
+  }catch(e){this.want=false;BLE.st("Heart rate: "+e.message)}},
+ async hook(){
+  const srv=await this.dev.gatt.connect(),svc=await srv.getPrimaryService(U(0x180d)),c=await svc.getCharacteristic(U(0x2a37));
+  c.addEventListener("characteristicvaluechanged",e=>this.data(e.target.value));await c.startNotifications();
+  this.tries=0;$("hrcon").classList.add("on");$("hrlbl").textContent="– bpm";BLE.st("Heart-rate strap connected: "+(this.dev.name||"strap")+". If no value appears, make sure the strap is not paired to another device.")},
+ lost(){this.bpm=null;$("hrcon").classList.remove("on");$("hrlbl").textContent="Heart rate";
+  if(this.want&&this.tries<5){this.tries++;BLE.st("Strap lost, reconnecting ("+this.tries+"/5)…");setTimeout(()=>{if(this.want)this.hook().catch(()=>this.lost())},2000*this.tries)}
+  else{this.want=false;BLE.st("Heart-rate strap disconnected.")}},
+ disconnect(){this.want=false;try{this.dev&&this.dev.gatt.disconnect()}catch(e){}},
+ data(v){const f=v.getUint8(0),b=f&1?v.getUint16(1,true):v.getUint8(1);
+  if(b>0&&b<250){this.bpm=b;this.t=Date.now();$("hrlbl").textContent=b+" bpm"}else{this.bpm=null}}};
+const hrNow=()=>{if(HR.bpm!=null&&Date.now()-HR.t<5000)return HR.bpm;const t=BLE.live&&BLE.live.hr;return t>0?t:null};
+$("hrcon").onclick=()=>{if(HR.dev&&HR.dev.gatt.connected)HR.disconnect();else HR.connect()};
 const am=$("alertmodal");$("alertbtn").onclick=()=>{am.hidden=false};$("alertclose").onclick=()=>{am.hidden=true};
 am.onclick=e=>{if(e.target===am)am.hidden=true};document.addEventListener("keydown",e=>{if(e.key==="Escape")am.hidden=true});
 $("btcon").onclick=()=>{if(BLE.cp&&BLE.dev){BLE.dev.gatt.disconnect()}else BLE.connect()};
@@ -485,10 +509,11 @@ function renderSummary(log,e,km){const ev=log.events,segs=ev.map((x,k)=>({dur:Ma
  const big=(l,v,u)=>`<div class="stat"><span class="lbl">${l}</span><b>${v}${u?`<small>${u}</small>`:""}</b></div>`;
  $("dname").textContent=log.name;$("ddate").textContent="Workout complete · "+new Date(log.started_at).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
  $("dsum").innerHTML=big("Time",fmt(e))+big("Distance",km.toFixed(2),"km")+big("Elevation gain","+"+Math.round(vt),"m")+big("Avg speed",(km/(Math.max(e,1)/3600)).toFixed(1),"km/h");
- $("dsum2").innerHTML=`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`+mv;
+ const hs=(log.hr||[]).map(x=>x[1]),hv=hs.length?`<span>Avg HR<b>${Math.round(hs.reduce((a,b)=>a+b,0)/hs.length)} bpm</b></span><span>Max HR<b>${Math.max(...hs)} bpm</b></span>`:"";
+ $("dsum2").innerHTML=`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`+hv+mv;
  $("dchart").innerHTML=chart(segs,tot,{planned:pl,fill:true})}
 // ---- run
-var S=null;let AC=null,wl=null,tick=null;
+var S=null;let AC=null,wl=null,tick=null,hrt=null;
 function beep(n,f=880,len=.18){if(!$("snd").checked||!AC)return;for(let i=0;i<n;i++){const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;o.connect(g);g.connect(AC.destination);const t=AC.currentTime+i*.28;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.4,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+len);o.start(t);o.stop(t+len+.02)}}
 const vib=p=>{try{if($("vib").checked&&navigator.vibrate)navigator.vibrate(p)}catch(e){}};
 const say=t=>{try{if($("spk").checked&&window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(t))}}catch(e){}};
@@ -499,14 +524,14 @@ function setBlockVals(i){S.speed=B[i].speed;S.incline=B[i].incline}
 $("start").onclick=()=>{try{localStorage.setItem("tc_json",$("json").value)}catch(e){}
  try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){AC=null}
  try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(l=>wl=l).catch(()=>{})}catch(e){}
- S={t0:Date.now(),started:new Date().toISOString(),pausedMs:0,paused:false,skip:0,idx:-1,events:[],alerted:-1,lead:+$("lead").value||10,speed:B[0].speed,incline:B[0].incline,end:B.reduce((a,b)=>a+b.dur,0)};
+ S={hr:[],t0:Date.now(),started:new Date().toISOString(),pausedMs:0,paused:false,skip:0,idx:-1,events:[],alerted:-1,lead:+$("lead").value||10,speed:B[0].speed,incline:B[0].incline,end:B.reduce((a,b)=>a+b.dur,0)};
  show("run");$("pause").textContent="Pause";$("stop").disabled=true;$("stop").className="ghost";
  $("tl").innerHTML=chart(B.map(b=>({dur:b.dur,speed:b.speed,incline:b.incline})),S.end,{playhead:true,fill:true});
  BLE.live={};
  if(BLE.on()){S.hold=true;$("banner").className="banner soon";$("banner").textContent="Starting treadmill…";
   BLE.begin(B[0].speed,B[0].incline).then(()=>{
-   if(S){S.t0=Date.now();S.pausedMs=0;S.skip=0;S.hold=false;S.events=[];S.idx=-1;S.alerted=-1;beep(1,660)}})}
- beep(1,660);tick=setInterval(loop,200);loop()};
+   if(S){S.t0=Date.now();S.pausedMs=0;S.skip=0;S.hold=false;S.events=[];S.hr=[];S.idx=-1;S.alerted=-1;beep(1,660)}})}
+ beep(1,660);tick=setInterval(loop,200);clearInterval(hrt);hrt=setInterval(hrLoop,1000);hrLoop();loop()};
 function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){finish(false);return}
  const i=curIdx(e),b=B[i],nb=B[i+1],rem=b.t0+b.dur-e;
  if(i!==S.idx){S.idx=i;setBlockVals(i);logEv();S.resent=false;S.mis=0;if(i>0)BLE.send(S.speed,S.incline);if(i>0){beep(3,1175);vib([300,100,300]);say(`Now ${b.speed} kilometres per hour, incline ${b.incline} percent`);S.nowUntil=Date.now()+6000}}
@@ -526,6 +551,8 @@ function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){fi
  $("mach").textContent=BLE.cp?`${BLE.live.dist??"–"} m · +${BLE.live.asc??"–"} m`:"not connected";
  const ph=$("tl").querySelector(".playhead");if(ph)ph.style.left=(e/S.end*100)+"%";const cr=$("tl").querySelector(".cliprect");if(cr)cr.setAttribute("width",(e/S.end*1000).toFixed(1));
  $("ring").style.width=(100*(1-Math.max(0,rem)/b.dur))+"%";$("blkno").textContent="Block "+(i+1)+" / "+B.length}
+function hrLoop(){if(!S)return;const b=hrNow();$("hrv").textContent=b??"–";
+ if(b!=null&&!S.paused&&!S.hold){const t=Math.round(elapsed()),l=S.hr[S.hr.length-1];if(!l||l[0]!==t)S.hr.push([t,b])}}
 function distOf(ev,end){let km=0;for(let k=0;k<ev.length;k++){const t1=k+1<ev.length?ev[k+1].t:end;km+=ev[k].speed*Math.max(0,t1-ev[k].t)/3600}return km}
 function vertOf(ev,end){let up=0;for(let k=0;k<ev.length;k++){const t1=k+1<ev.length?ev[k+1].t:end,dt=Math.max(0,t1-ev[k].t);if(ev[k].incline>0)up+=rise(ev[k].speed*dt/3600,ev[k].incline)}return up}
 document.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=()=>{if(!S||S.paused||S.hold)return;const a=btn.dataset.a,d=parseFloat(a.slice(1));
@@ -534,9 +561,9 @@ $("pause").onclick=()=>{if(!S)return;if(S.paused){S.pausedMs+=Date.now()-S.pause
  else{S.paused=true;S.pauseAt=Date.now();$("stop").disabled=false;$("stop").className="";$("pause").textContent="Resume";$("banner").className="banner soon";$("banner").textContent="PAUSED — timer stopped, belt keeps running"}};
 $("skip").onclick=()=>{if(!S||S.paused||S.hold)return;const e=elapsed(),i=curIdx(e);if(B[i+1]){S.skip+=B[i+1].t0-e+.01;S.alerted=-1}};
 $("stop").onclick=()=>S&&finish(true);
-function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);BLE.stop();try{wl&&wl.release()}catch(x){}
+function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);clearInterval(hrt);BLE.stop();try{wl&&wl.release()}catch(x){}
  if(!early)beep(4,1319);vib([500,150,500]);
- const log={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc}};
+ const log={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc}};
  const km=S.events.reduce((a,ev,k)=>a+ev.speed*Math.max(0,((k+1<S.events.length?S.events[k+1].t:e)-ev.t))/3600,0);
  show("done");
  renderSummary(log,e,km);
