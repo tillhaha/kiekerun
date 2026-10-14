@@ -13,7 +13,7 @@
 :root,[data-theme="volt"]{
   --bg:#f4f4f0; --surface:#ffffff; --surface-2:#e9e9e3; --line:#d9d9d2; --ink:#0b0b0b; --muted:#64645f;
   --primary:#0b0b0b; --primary-ink:#00d4ff; --highlight:#00d4ff; --highlight-ink:#0b0b0b;
-  --chart-bg:#0b0b0b; --chart-grid:#2b2b2b; --chart-ink:#9a9a94; --speed:#ffffff; --incline:#00d4ff;
+  --chart-bg:#ffffff; --chart-grid:#ecece6; --chart-ink:#64645f; --chart-fut:#dcdcd5; --speed:#0b0b0b; --incline:#00d4ff;
   --speed-text:#0b0b0b; --incline-text:#0b0b0b;
   --alert:#ff4d00; --alert-ink:#0b0b0b; --alert-tint:#ffe3d6; --alert-tint-ink:#a83300;
   --num-style:italic; color-scheme:light;
@@ -21,7 +21,7 @@
 [data-theme="night"]{
   --bg:#0a0b0d; --surface:#121418; --surface-2:#1b1e23; --line:#2a2e35; --ink:#f2f3f5; --muted:#8a919c;
   --primary:#00d4ff; --primary-ink:#0a0b0d; --highlight:#00d4ff; --highlight-ink:#0a0b0d;
-  --chart-bg:#121418; --chart-grid:#2a2e35; --chart-ink:#8a919c; --speed:#f2f3f5; --incline:#00d4ff;
+  --chart-bg:#121418; --chart-grid:#2a2e35; --chart-ink:#8a919c; --chart-fut:#0d4e5d; --speed:#f2f3f5; --incline:#00d4ff;
   --speed-text:#f2f3f5; --incline-text:#f2f3f5;
   --alert:#ff6a1a; --alert-ink:#0a0b0d; --alert-tint:#2e1a10; --alert-tint-ink:#ff8a4a;
   --num-style:normal; color-scheme:dark;
@@ -90,8 +90,8 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .plot svg{position:absolute;inset:0;width:100%;height:100%}
 .plot .g{stroke:var(--chart-grid);stroke-width:1;vector-effect:non-scaling-stroke}
 .c-inc rect{fill:var(--incline)}
-.c-inc.fut rect{opacity:.3}
-.c-spd{fill:none;stroke:var(--speed);stroke-width:2.5;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.c-inc.fut rect{fill:var(--chart-fut)}
+.c-spd{fill:none;stroke:var(--speed);stroke-width:3;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 .c-plan{fill:none;stroke:var(--chart-ink);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
 .playhead{position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;background:var(--alert);left:0}
 .xl{position:relative;height:18px;font:500 12px var(--ft);color:var(--muted);font-variant-numeric:tabular-nums}
@@ -192,9 +192,6 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .stat small{font:600 15px var(--fd);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-left:6px;font-style:normal}
 .bottom{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:12px;min-height:0}
 .chartpanel{padding:12px}
-[data-theme="volt"] .chartpanel{background:var(--chart-bg)}
-[data-theme="volt"] .chartpanel .xl,[data-theme="volt"] .chartpanel .legend{color:var(--chart-ink)}
-[data-theme="volt"] .chartpanel .sw.spd{background:var(--speed)}
 [data-theme="night"] .chartpanel{padding:12px 0 0}
 #tl{flex:1;min-height:0}
 .controls{display:grid;grid-template-rows:auto 1fr 1fr;gap:10px;min-height:0}
