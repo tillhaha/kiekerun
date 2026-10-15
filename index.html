@@ -172,7 +172,15 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 [data-theme="night"] .nextcard{background:transparent;border:1px solid var(--line)}
 .nextcard b{font:700 24px/1.1 var(--fd);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nextcard .nv{font:600 17px var(--fd);letter-spacing:.04em;color:var(--muted);font-variant-numeric:tabular-nums}
-.main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr);gap:12px;min-height:0}
+.main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px;min-height:0}
+.vals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1fr) minmax(0,1fr) auto;gap:10px 12px;min-height:0}
+.vals .tile{padding:8px 18px;container-type:size}
+.vals .val .u{margin-top:2px;line-height:1.1}
+.vals .adj{margin-top:0}
+.vals .val .n{font-size:clamp(30px,54cqh,84px);line-height:.95}
+[data-theme="night"] .vals .tile.val{border-left:0;border-top:1px solid var(--line);padding-left:0}
+[data-theme="night"] .vals .tile.val:nth-child(even){border-left:1px solid var(--line);padding-left:24px}
+.vals .val .n small{font-size:15px;opacity:.6}
 .tile{background:var(--surface);border-radius:var(--r);padding:18px 20px;display:flex;flex-direction:column;min-width:0;min-height:0}
 [data-theme="night"] .tile{background:transparent;border-radius:0;border-top:1px solid var(--line);padding-left:0}
 [data-theme="night"] .tile+.tile{border-left:1px solid var(--line);padding-left:24px}
@@ -188,14 +196,14 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 [data-theme="volt"] #blkbar i{background:var(--highlight)}
 .val .n{font:700 clamp(60px,14vh,128px)/.9 var(--fd);font-variant-numeric:tabular-nums;font-style:var(--num-style);margin-top:auto}
 [data-theme="night"] .val .n{font-weight:600}
-.val.sp .n{color:var(--speed-text)}.val.in .n{color:var(--incline-text)}
+.val.sp .n,.val.pc .n{color:var(--speed-text)}.val.in .n{color:var(--incline-text)}
 .val .n{white-space:nowrap}
 .val .n small{font-size:.28em;font-weight:600;letter-spacing:.04em;margin-left:.15em;opacity:.55}
 .val .u{font:600 15px var(--fd);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:6px;display:flex;gap:8px}
 .adj{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .adj button{height:56px;font-size:22px;letter-spacing:.02em}
 [data-theme="night"] .adj button{background:transparent}
-.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .stat{background:var(--surface);border-radius:var(--r);padding:12px 18px;display:flex;flex-direction:column;gap:4px;min-width:0}
 [data-theme="night"] .stat{background:transparent;border-radius:0;border-top:1px solid var(--line);padding-left:0}
 [data-theme="night"] .stat+.stat{border-left:1px solid var(--line);padding-left:24px}
@@ -261,7 +269,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
   .app{height:auto;min-height:0}
   .top{grid-template-columns:1fr auto}.steps{grid-column:1/-1;grid-row:2;justify-content:center}
   .plan-grid,.sum-body,.bottom,.toprow{grid-template-columns:1fr}
-  .main{grid-template-columns:1fr 1fr}.main .tile:first-child{grid-column:1/-1}
+  .main{grid-template-columns:1fr}
   .stats,.bigstats{grid-template-columns:1fr 1fr}
   .run-screen,.plan-screen,.sum-screen{grid-template-rows:none}
   .chartpanel{min-height:170px}
@@ -358,17 +366,20 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <div class="big" id="blockrem">0:00</div>
         <div class="bar" id="blkbar"><i id="ring"></i></div>
       </div>
-      <div class="tile val sp"><div class="lbl">Speed</div><div class="n"><span id="vs">–</span><small>km/h</small></div><div class="u"><span id="ps"></span></div>
-        <div class="adj"><button data-a="s-0.5" aria-label="Speed minus 0.5">−0.5</button><button data-a="s+0.5" aria-label="Speed plus 0.5">+0.5</button></div></div>
-      <div class="tile val in"><div class="lbl">Incline</div><div class="n"><span id="vi">–</span><small>%</small></div><div class="u"><span id="pi"></span></div>
-        <div class="adj"><button data-a="i-1" aria-label="Incline minus 1">−1</button><button data-a="i+1" aria-label="Incline plus 1">+1</button></div></div>
+      <div class="vals">
+        <div class="tile val pc"><div class="lbl">Pace</div><div class="n"><span id="vp">–</span><small>min/km</small></div><div class="u"><span id="pp"></span></div></div>
+        <div class="tile val hr"><div class="lbl">Heart rate</div><div class="n"><span id="hrv">–</span><small>bpm</small></div><div class="u"><span>&nbsp;</span></div></div>
+        <div class="tile val sp"><div class="lbl">Speed</div><div class="n"><span id="vs">–</span><small>km/h</small></div><div class="u"><span id="ps"></span></div></div>
+        <div class="tile val in"><div class="lbl">Incline</div><div class="n"><span id="vi">–</span><small>%</small></div><div class="u"><span id="pi"></span></div></div>
+        <div class="adj"><button data-a="s-0.5" aria-label="Speed minus 0.5">−0.5</button><button data-a="s+0.5" aria-label="Speed plus 0.5">+0.5</button></div>
+        <div class="adj"><button data-a="i-1" aria-label="Incline minus 1">−1</button><button data-a="i+1" aria-label="Incline plus 1">+1</button></div>
+      </div>
     </div>
     <div class="stats">
       <div class="stat"><span class="lbl">Elapsed</span><b id="el">0:00</b></div>
       <div class="stat"><span class="lbl">Remaining</span><b id="rem">0:00</b></div>
       <div class="stat"><span class="lbl">Distance</span><b><span id="dist">0.00</span><small>km</small></b></div>
       <div class="stat"><span class="lbl">Elevation gain</span><b>+<span id="vert">0</span><small>m</small></b></div>
-      <div class="stat"><span class="lbl">Heart rate</span><b><span id="hrv">–</span><small>bpm</small></b></div>
     </div>
     <div class="bottom">
       <div class="card chartpanel"><div id="tl"></div></div>
@@ -645,8 +656,8 @@ function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){fi
   if(rem<=3&&rem>0&&S.tk!==Math.ceil(rem)+"-"+i){S.tk=Math.ceil(rem)+"-"+i;beep(1,1000,.08)}}
  else{bn.className="banner";bn.textContent=b.label}
  $("curlbl").textContent=b.label;$("blockrem").textContent=fmt(rem);
- const lv=BLE.cp&&BLE.on();$("vs").textContent=(lv&&BLE.live.speed!=null?BLE.live.speed:S.speed).toFixed(1);$("vi").textContent=(lv&&BLE.live.incline!=null?BLE.live.incline:S.incline).toFixed(0);
- $("ps").textContent=`target ${S.speed.toFixed(1)}`;$("pi").textContent=`target ${S.incline.toFixed(0)}`;
+ const lv=BLE.cp&&BLE.on();const sv=lv&&BLE.live.speed!=null?BLE.live.speed:S.speed;$("vs").textContent=sv.toFixed(1);$("vp").textContent=pace(sv);$("vi").textContent=(lv&&BLE.live.incline!=null?BLE.live.incline:S.incline).toFixed(0);
+ $("ps").textContent=`target ${S.speed.toFixed(1)}`;$("pp").textContent=`target ${pace(S.speed)}`;$("pi").textContent=`target ${S.incline.toFixed(0)}`;
  if(BLE.on()&&BLE.live.speed!=null){if(Math.abs(BLE.live.speed-S.speed)>0.3){S.mis=S.mis||Date.now();if(Date.now()-S.mis>8000&&!S.resent){S.resent=true;BLE.send(S.speed,S.incline)}}else{S.mis=0;S.resent=false}}
  $("nxl").textContent=nb?nb.label:"finish";$("nxv").textContent=nb?`${nb.speed} km/h · ${nb.incline}% · ${fmt(nb.dur)}`:"";
  $("prog").style.width=(e/S.end*100)+"%";$("el").textContent=fmt(e);$("rem").textContent=fmt(S.end-e);
@@ -654,6 +665,7 @@ function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){fi
  $("mach").textContent=BLE.cp?`${BLE.live.dist??"–"} m · +${BLE.live.asc??"–"} m`:"not connected";
  const ph=$("tl").querySelector(".playhead");if(ph)ph.style.left=(e/S.end*100)+"%";const cr=$("tl").querySelector(".cliprect");if(cr)cr.setAttribute("width",(e/S.end*1000).toFixed(1));
  $("ring").style.width=(100*(1-Math.max(0,rem)/b.dur))+"%";$("blkno").textContent="Block "+(i+1)+" / "+B.length}
+function pace(kmh){if(!(kmh>0))return"–";const t=Math.round(3600/kmh);return Math.floor(t/60)+":"+String(t%60).padStart(2,"0")}
 function hrLoop(){if(!S)return;const b=hrNow();$("hrv").textContent=b??"–";
  if(HR.want&&HR.dev&&HR.dev.gatt.connected&&!S.hold&&!S.paused){if(b==null){S.hrGap=(S.hrGap||0)+1;if(S.hrGap===10)BLE.st("No heart-rate signal from the strap.",true,"hrgap")}else{if(S.hrGap>=10)BLE.clr("hrgap");S.hrGap=0}}
  if(b!=null&&!S.paused&&!S.hold){const t=Math.round(elapsed()),l=S.hr[S.hr.length-1];if(!l||l[0]!==t)S.hr.push([t,b])}}
