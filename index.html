@@ -94,10 +94,18 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .c-spd{fill:none;stroke:var(--speed);stroke-width:3;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 .c-plan{fill:none;stroke:var(--chart-ink);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
 .playhead{position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;background:var(--alert);left:0}
-.xl{position:relative;height:18px;font:500 12px var(--ft);color:var(--muted);font-variant-numeric:tabular-nums}
+.pw{position:relative;margin:0 34px;display:flex;flex-direction:column;flex:none}
+.chartbox.fill .pw{flex:1;min-height:70px}
+.chartbox.fill .pw .plot{flex:1;height:auto}
+.yl{position:absolute;top:0;bottom:0;width:30px;font:500 12px var(--ft);color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
+.yl.l{left:-34px;text-align:right}.yl.r{right:-34px;text-align:left}
+.yl span{position:absolute;left:0;right:0;transform:translateY(-50%)}
+.yl span.t{transform:none}
+.yl span.u{top:auto;bottom:0;transform:none}
+.xl{margin:0 34px;position:relative;height:18px;font:500 12px var(--ft);color:var(--muted);font-variant-numeric:tabular-nums}
 .xl span{position:absolute;top:3px;transform:translateX(-50%);white-space:nowrap}
 .xl span:first-child{transform:none}
-.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend{margin:0 34px;display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .legend span{display:flex;align-items:center;gap:6px}
 .sw{display:inline-block;width:12px;height:12px;border-radius:2px}
 .sw.inc{background:var(--incline)}.sw.spd{background:var(--speed);box-shadow:inset 0 0 0 1px var(--line)}
@@ -180,6 +188,8 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .val .n{font:700 clamp(60px,14vh,128px)/.9 var(--fd);font-variant-numeric:tabular-nums;font-style:var(--num-style);margin-top:auto}
 [data-theme="night"] .val .n{font-weight:600}
 .val.sp .n{color:var(--speed-text)}.val.in .n{color:var(--incline-text)}
+.val .n{white-space:nowrap}
+.val .n small{font-size:.28em;font-weight:600;letter-spacing:.04em;margin-left:.15em;opacity:.55}
 .val .u{font:600 15px var(--fd);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:6px;display:flex;gap:8px}
 .adj{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .adj button{height:56px;font-size:22px;letter-spacing:.02em}
@@ -316,9 +326,9 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <div class="big" id="blockrem">0:00</div>
         <div class="bar" id="blkbar"><i id="ring"></i></div>
       </div>
-      <div class="tile val sp"><div class="lbl"><i class="sw spd"></i>Speed</div><div class="n" id="vs">–</div><div class="u">km/h · <span id="ps"></span></div>
+      <div class="tile val sp"><div class="lbl">Speed</div><div class="n"><span id="vs">–</span><small>km/h</small></div><div class="u"><span id="ps"></span></div>
         <div class="adj"><button data-a="s-0.5" aria-label="Speed minus 0.5">−0.5</button><button data-a="s+0.5" aria-label="Speed plus 0.5">+0.5</button></div></div>
-      <div class="tile val in"><div class="lbl"><i class="sw inc"></i>Incline</div><div class="n" id="vi">–</div><div class="u">% · <span id="pi"></span></div>
+      <div class="tile val in"><div class="lbl">Incline</div><div class="n"><span id="vi">–</span><small>%</small></div><div class="u"><span id="pi"></span></div>
         <div class="adj"><button data-a="i-1" aria-label="Incline minus 1">−1</button><button data-a="i+1" aria-label="Incline plus 1">+1</button></div></div>
     </div>
     <div class="stats">
@@ -488,16 +498,17 @@ function niceStep(t){return [15,30,60,120,300,600,900,1200,1800,3600].find(x=>t/
 function stepPts(segs,tot,fy){let x=0,p=[];segs.forEach(g=>{const w=g.dur/tot*1000,y=fy(g).toFixed(1);p.push(x.toFixed(1)+","+y,(x+w).toFixed(1)+","+y);x+=w});return p.join(" ")}
 let chartN=0;
 function chart(segs,tot,o={}){const pl=o.planned||[];
- const mi=Math.max(0,...segs.map(g=>g.incline),...pl.map(g=>g.incline)),iMax=Math.min(40,Math.max(10,Math.ceil(mi/5)*5)),
-  ms=Math.max(1,...segs.map(g=>g.speed),...pl.map(g=>g.speed)),sMax=Math.ceil(ms)+1,H=100;
- const fi=g=>H-Math.max(0,g.incline)/iMax*H*.9,fs=g=>H-g.speed/sMax*H;
+ const mi=Math.max(0,...segs.map(g=>g.incline),...pl.map(g=>g.incline)),iMax=Math.min(40,Math.max(8,Math.ceil((mi+1)/4)*4)),
+  ms=Math.max(1,...segs.map(g=>g.speed),...pl.map(g=>g.speed)),sMax=Math.max(4,Math.ceil((ms+.5)/4)*4),H=100;
+ const fi=g=>H-Math.max(0,g.incline)/iMax*H,fs=g=>H-g.speed/sMax*H;
  let x=0,bars="";segs.forEach(g=>{const w=g.dur/tot*1000,y=fi(g);bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(w-1.5,.6).toFixed(1)}" height="${(H-y).toFixed(1)}"/>`;x+=w});
  const id="tcclip"+(++chartN);
  const inc=o.playhead?`<defs><clipPath id="${id}"><rect class="cliprect" x="0" y="0" width="0" height="100"/></clipPath></defs><g class="c-inc fut">${bars}</g><g class="c-inc" clip-path="url(#${id})">${bars}</g>`:`<g class="c-inc">${bars}</g>`;
  const grid=[25,50,75].map(y=>`<line class="g" x1="0" x2="1000" y1="${y}" y2="${y}"/>`).join("");
+ const ql=(m,c,u)=>`<div class="yl ${c}">`+[0,25,50,75].map(y=>`<span${y?"":' class="t"'} style="top:${y}%">${+(m*(100-y)/100).toFixed(1)}</span>`).join("")+`<span class="u">${u}</span></div>`;
  const st=niceStep(tot);let xl="";for(let t=0;t<=tot;t+=st)xl+=`<span style="left:${t/tot*100}%">${fmt(t)}</span>`;
- return `<div class="chartbox${o.fill?" fill":""}" style="--ch:${o.h||150}px"><div class="plot"><svg viewBox="0 0 1000 100" preserveAspectRatio="none">${grid}${inc}${pl.length?`<polyline class="c-plan" points="${stepPts(pl,tot,fs)}"/>`:""}<polyline class="c-spd" points="${stepPts(segs,tot,fs)}"/></svg>${o.playhead?'<div class="playhead"></div>':""}</div>
- <div class="xl">${xl}</div><div class="legend"><span><i class="sw inc"></i>Incline 0–${iMax}%</span><span><i class="sw spd"></i>Speed 0–${sMax} km/h</span>${pl.length?'<span><i class="sw plan"></i>Planned speed</span>':""}</div></div>`}
+ return `<div class="chartbox${o.fill?" fill":""}" style="--ch:${o.h||150}px"><div class="pw">${ql(sMax,"l","km/h")}${ql(iMax,"r","%")}<div class="plot"><svg viewBox="0 0 1000 100" preserveAspectRatio="none">${grid}${inc}${pl.length?`<polyline class="c-plan" points="${stepPts(pl,tot,fs)}"/>`:""}<polyline class="c-spd" points="${stepPts(segs,tot,fs)}"/></svg>${o.playhead?'<div class="playhead"></div>':""}</div></div>
+ <div class="xl">${xl}</div></div>`}
 function renderPreview(B){const tot=B.reduce((a,b)=>a+b.dur,0);
  $("pvtl").innerHTML=chart(B,tot,{h:130});
  $("pvtab").innerHTML='<div class="tbl"><table><thead><tr><th>#</th><th>Block</th><th>Start</th><th>Time</th><th>km/h</th><th>Incline</th></tr></thead><tbody>'+
