@@ -143,6 +143,7 @@ def test_upload_builds_fit_and_pairs_event(make):
     c, _ = make({("POST", "/activities"): up})
     r = c.post("/api/upload", json={"log": log, "paired_event_id": 7}, headers=AUTH).json()
     assert r["ok"] and r["totals"]["duration_s"] == 5
+    assert seen["params"]["device_name"] == "KiekeRun"
     assert seen["params"]["paired_event_id"] == 7 and seen["params"]["external_id"] == "kiekerun-20261020T120000"
     assert seen["bytes"][8:12] == b".FIT"
 

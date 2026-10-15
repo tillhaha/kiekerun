@@ -228,7 +228,11 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .sum-body{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:12px;min-height:0}
 #dchart{flex:1;min-height:0}
 pre.log{flex:1;min-height:70px;max-height:220px;overflow:auto;background:var(--bg);border:1px solid var(--line);padding:10px;border-radius:var(--r);font-size:11px;white-space:pre-wrap;word-break:break-all;margin:0;color:var(--muted)}
-.export{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-top:auto}
+.export{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:auto}
+.export #up{grid-column:1/-1}
+#todaybtn{width:100%}
+#todaymsg,#upmsg{overflow-wrap:anywhere}
+#upmsg a{color:inherit;text-decoration:underline;margin-left:4px}
 
 /* modal */
 .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
@@ -284,6 +288,9 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div class="plan-grid">
       <div class="card loadcol">
         <h2 class="lbl">Load workout</h2>
+        <button class="pri" id="todaybtn">Today's workout</button>
+        <div class="muted" id="todaymsg" hidden></div>
+        <div class="recent" id="todaylist"></div>
         <input type="file" id="file" accept=".json,application/json" hidden>
         <div class="drop" id="filebtn" role="button" tabindex="0" aria-label="Load a workout JSON file">
           <svg viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M4 15v4a1 1 0 001 1h14a1 1 0 001-1v-4"/></svg>
@@ -358,10 +365,11 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="card"><h2 class="lbl">Planned vs actual</h2><div id="dchart"></div></div>
       <div class="card">
         <h2 class="lbl">Export</h2>
-        <div class="muted">Download or copy the log, then run <code>tcoach fit log.json --out run.fit</code> (heart rate is included automatically) and upload to intervals.icu.</div>
+        <div class="muted">Upload sends this session to intervals.icu with elevation and heart rate. Download keeps the raw log.</div>
         <pre class="log" id="logout"></pre>
+        <div class="muted" id="upmsg"></div>
         <div class="muted" id="copied"></div>
-        <div class="export"><button class="pri" id="dl">Download log</button><button id="copy">Copy</button><button class="ghost" id="again">New</button></div>
+        <div class="export"><button class="pri" id="up">Upload to intervals.icu</button><button id="dl">Download</button><button id="copy">Copy</button><button class="ghost" id="again">New</button></div>
       </div>
     </div>
   </section>
@@ -396,7 +404,7 @@ function validate(bl){const is=[];bl.forEach((b,i)=>{
  if(b.incline>20&&b.speed>9)is.push(["error",`Block ${i+1} ${b.label}: above 20% incline speed is limited to 9 km/h`]);
  if(i&&Math.abs(b.speed-bl[i-1].speed)>6)is.push(["warn",`Block ${i+1}: big speed jump`]);
  if(i&&Math.abs(b.incline-bl[i-1].incline)>15)is.push(["warn",`Block ${i+1}: big incline jump`])});return is}
-let W=null,B=[];
+let W=null,B=[],PLANNED=null;
 function parse(){const box=$("issues"),sum=$("sum");box.innerHTML="";sum.innerHTML="";$("pvtl").innerHTML="";$("pvtab").innerHTML="";$("ctaname").textContent="No workout loaded";$("ctanote").textContent="Pick an example or drop your own workout.";$("start").disabled=true;$("readytxt").textContent="Load a workout to start";W=null;
  const txt=$("json").value.trim();if(!txt)return;
  try{W=JSON.parse(txt);B=flat(W);if(!B.length)throw Error("no blocks")}catch(e){box.innerHTML=`<div class="issue error">${e.message}</div>`;$("pastebox").open=true;$("readytxt").textContent="The JSON has an error";W=null;return}
@@ -405,11 +413,11 @@ function parse(){const box=$("issues"),sum=$("sum");box.innerHTML="";sum.innerHT
  const is=validate(B);is.forEach(([k,m])=>{const d=document.createElement("div");d.className="issue "+k;d.textContent=m;box.appendChild(d)});
  renderPreview(B);$("start").disabled=is.some(i=>i[0]==="error");
  $("readytxt").textContent=$("start").disabled?"Fix the errors above to start":is.length?"Ready, with "+is.length+" warning"+(is.length>1?"s":""):"All blocks within treadmill limits"}
-$("json").oninput=parse;
-["ex1","ex2","ex3"].forEach(k=>$(k).onclick=()=>{$("json").value=JSON.stringify(EX[k],null,1);parse();document.querySelectorAll(".recent button").forEach(b=>b.classList.toggle("sel",b.id===k))});
+$("json").oninput=()=>{PLANNED=null;parse()};
+["ex1","ex2","ex3"].forEach(k=>$(k).onclick=()=>{PLANNED=null;$("json").value=JSON.stringify(EX[k],null,1);parse();document.querySelectorAll(".recent button").forEach(b=>b.classList.toggle("sel",b.id===k))});
 $("filebtn").onclick=()=>$("file").click();
 $("filebtn").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("file").click()}};
-function loadFile(f){if(!f)return;const r=new FileReader();r.onload=()=>{$("json").value=r.result;document.querySelectorAll(".recent button").forEach(b=>b.classList.remove("sel"));parse()};r.readAsText(f)}
+function loadFile(f){if(!f)return;const r=new FileReader();r.onload=()=>{PLANNED=null;$("json").value=r.result;document.querySelectorAll(".recent button").forEach(b=>b.classList.remove("sel"));parse()};r.readAsText(f)}
 $("file").onchange=e=>{loadFile(e.target.files[0]);e.target.value=""};
 const dz=$("filebtn");["dragenter","dragover"].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add("over")}));
 ["dragleave","drop"].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove("over")}));
@@ -492,6 +500,20 @@ const am=$("alertmodal");$("alertbtn").onclick=()=>{am.hidden=false};$("alertclo
 am.onclick=e=>{if(e.target===am)am.hidden=true};document.addEventListener("keydown",e=>{if(e.key==="Escape")am.hidden=true});
 $("btcon").onclick=()=>{if(BLE.cp&&BLE.dev){BLE.dev.gatt.disconnect()}else BLE.connect()};
 
+// ---- intervals.icu bridge (backend routes under /api, same origin, browser login)
+async function API(path,opt){let r;try{r=await fetch(path,opt)}catch(e){throw Error("backend not reachable"+(location.protocol==="file:"?" (open the page from the server, not as a file)":""))}
+ let j=null;try{j=await r.json()}catch(e){}
+ if(!r.ok)throw Error(j&&j.detail||(r.status===404?"backend not running (Coolify build pack must be Dockerfile)":"HTTP "+r.status));return j}
+function planMsg(t,err){const m=$("todaymsg");m.textContent=t;m.hidden=!t;m.style.color=err?"var(--alert-tint-ink)":""}
+function useWorkout(it){$("json").value=JSON.stringify(it.workout,null,1);document.querySelectorAll(".recent button").forEach(b=>b.classList.remove("sel"));parse();PLANNED=it.event_id||null}
+$("todaybtn").onclick=async()=>{const b=$("todaybtn"),list=$("todaylist");b.disabled=true;list.innerHTML="";planMsg("Loading from intervals.icu…");
+ try{const d=await API("/api/planned"),ok=d.items.filter(i=>i.workout);
+  if(!d.items.length)planMsg("Nothing planned for "+d.date+" in intervals.icu.");
+  else if(!ok.length)planMsg("Found "+d.items.map(i=>i.name).join(", ")+" for "+d.date+", but no treadmill steps (incline) in it.",true);
+  else if(ok.length===1){useWorkout(ok[0]);planMsg("Loaded: "+ok[0].name)}
+  else{planMsg("Several workouts on "+d.date+", pick one:");ok.forEach(it=>{const x=document.createElement("button"),n=document.createElement("b");n.textContent=it.name||"Workout";x.appendChild(n);x.onclick=()=>{useWorkout(it);x.classList.add("sel");planMsg("Loaded: "+it.name)};list.appendChild(x)})}
+ }catch(e){planMsg("intervals.icu: "+e.message,true)}
+ b.disabled=false};
 function show(n){const o=["setup","run","done"],c=o.indexOf(n);o.forEach((k,x)=>{$(k).hidden=k!==n;$("st-"+k).className=x===c?"on":x<c?"past":""});window.scrollTo(0,0)}
 const kpi=(l,v,c="")=>`<div class="kpi ${c}"><span class="lbl">${l}</span><b>${v}</b></div>`;
 function niceStep(t){return [15,30,60,120,300,600,900,1200,1800,3600].find(x=>t/x<=8)||3600}
@@ -577,10 +599,17 @@ function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);cle
  const log={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc}};
  const km=S.events.reduce((a,ev,k)=>a+ev.speed*Math.max(0,((k+1<S.events.length?S.events[k+1].t:e)-ev.t))/3600,0);
  show("done");
+ $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").textContent="";$("upmsg").style.color="";
  renderSummary(log,e,km);
  $("logout").textContent=JSON.stringify(log);S=null}
 $("copy").onclick=async()=>{const t=$("logout").textContent;try{await navigator.clipboard.writeText(t);$("copied").textContent="Copied."}catch(e){const r=document.createRange();r.selectNodeContents($("logout"));const s=getSelection();s.removeAllRanges();s.addRange(r);$("copied").textContent="Select-all done — copy manually."}};
 $("again").onclick=()=>show("setup");
+$("up").onclick=async()=>{const t=$("logout").textContent;if(!t)return;const b=$("up"),m=$("upmsg");b.disabled=true;m.style.color="";m.textContent="Uploading…";
+ try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED})});
+  const a0=d.intervals&&d.intervals.activities&&d.intervals.activities[0],id=a0&&a0.id;
+  if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded"}
+  else{m.textContent="intervals.icu created no new activity (this session was probably uploaded already).";b.textContent="Already uploaded"}
+ }catch(e){m.textContent="Upload failed: "+e.message;m.style.color="var(--alert-tint-ink)";b.disabled=false}};
 $("dl").onclick=()=>{const t=$("logout").textContent;if(!t)return;const a=document.createElement("a"),nm=(JSON.parse(t).started_at||"log").slice(0,16).replace(/[:T]/g,"-");
  a.href=URL.createObjectURL(new Blob([t],{type:"application/json"}));a.download="treadmill-"+nm+".json";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);$("copied").textContent="Downloaded "+a.download}
 const MOON="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z",SUN="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6L4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M16 12a4 4 0 11-8 0 4 4 0 018 0z";

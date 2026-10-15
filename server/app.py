@@ -157,5 +157,5 @@ def upload(body: UploadIn):
         res = _intervals_call(
             client().upload_activity, fit, name=log.get("name"),
             external_id=f"kiekerun-{start.astimezone(timezone.utc):%Y%m%dT%H%M%S}",
-            paired_event_id=body.paired_event_id)
+            paired_event_id=body.paired_event_id, device_name="KiekeRun")
     return {"ok": True, "totals": tot, "intervals": res}

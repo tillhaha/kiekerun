@@ -114,10 +114,10 @@ class IntervalsClient:
     # --- activities -------------------------------------------------------
     def upload_activity(self, fit_path, name: str | None = None, description: str | None = None,
                         external_id: str | None = None, paired_event_id: int | None = None,
-                        dry_run: bool = False) -> dict:
+                        device_name: str | None = None, dry_run: bool = False) -> dict:
         path = Path(fit_path)
         params = {k: v for k, v in (("name", name), ("description", description), ("external_id", external_id),
-                                    ("paired_event_id", paired_event_id)) if v}
+                                    ("paired_event_id", paired_event_id), ("device_name", device_name)) if v}
         if dry_run:
             return {"would_upload": path.name, "bytes": path.stat().st_size, "params": params}
         with path.open("rb") as fh:
