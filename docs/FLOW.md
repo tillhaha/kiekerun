@@ -40,10 +40,17 @@ Claude = Coach, intervals.icu = Planer + Analyse, KiekeRun = Laufband-Runner, Ga
 
  Outdoor (getrennt von KiekeRun):
 
- +--------------------+      +-----------------+      +---------------+
- | Garmin fenix 9 Pro | ---> | Garmin Connect  | ---> | intervals.icu |
- +--------------------+      +-----------------+      +---------------+
-                                  (Sync, angenommen)
+ Claude (Coach)
+   |
+   | 1b. Workouts pushen (Outdoor-Einheiten)
+   v
+ +---------------+  Push   +-----------------+  Sync  +--------------------+
+ | intervals.icu | ------> | Garmin Connect  | -----> | Garmin fenix 9 Pro |
+ | (Kalender)    |         |                 |        | (Workout auf Uhr)  |
+ +---------------+         +-----------------+        +---------+----------+
+        ^                           ^                           |
+        |   Aktivität (Sync)        |    Lauf aufgezeichnet     |
+        +---------------------------+---------------------------+
 
  9. Claude liest die Ergebnisse aus intervals.icu und passt den Plan an.
 ```
@@ -94,11 +101,12 @@ Claude = Coach, intervals.icu = Planer + Analyse, KiekeRun = Laufband-Runner, Ga
 | Gefühl | Tito | Feedback-Popup | `feel` |
 | Kohlenhydrate | Tito | Feedback-Popup (Summe) | `carbs_ingested` |
 | Notiz | Tito (Sprache) | Feedback-Popup | `description` |
-| Outdoor-Lauf | Garmin fenix 9 Pro | Garmin Connect, Sync | Aktivität |
+| Outdoor-Workout (geplant) | Claude | intervals.icu-Kalender, Garmin Connect, Uhr (Push, angenommen) | fenix 9 Pro |
+| Outdoor-Lauf (Ist) | Garmin fenix 9 Pro | Garmin Connect, Sync | Aktivität |
 
 ## Hinweise
 
-- Der Garmin-Pfad liegt außerhalb dieses Repos und ist nur zur Vollständigkeit eingezeichnet.
+- Der Garmin-Pfad (Push der Workouts auf die Uhr und Sync der Aktivität zurück) liegt außerhalb dieses Repos. Der genaue Weg des Pushes (hier über intervals.icu und Garmin Connect) ist angenommen.
 - Laufband-Einheiten werden nur über KiekeRun aufgezeichnet, nicht über die Garmin.
 - Die Aktivität bleibt als `VirtualRun` angelegt.
 - Schlägt das Update (RPE usw.) fehl, bleibt die Aktivität trotzdem erhalten, der Fehler wird gemeldet.
