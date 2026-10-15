@@ -22,6 +22,8 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
+from tcoach.calories import estimate_kcal
+from tcoach.feedback import block_stats, build_description, parse_feedback
 from tcoach.fit_writer import write_fit
 from tcoach.intervals_client import IntervalsClient, IntervalsError
 from tcoach.intervals_text import parse_intervals_text
@@ -142,20 +144,65 @@ class UploadIn(BaseModel):
     paired_event_id: int | None = None
 
 
+def body_weight_kg(cl: IntervalsClient) -> float | None:
+    """Weight for the calorie estimate: intervals.icu profile first, BODY_WEIGHT_KG as fallback."""
+    try:
+        w = cl.athlete().get("icu_weight")
+    except IntervalsError:
+        w = None
+    if not isinstance(w, (int, float)) or not 30 < w < 250:
+        try:
+            w = float(os.environ.get("BODY_WEIGHT_KG", ""))
+        except ValueError:
+            return None
+    return float(w) if 30 < w < 250 else None
+
+
 @app.post("/api/upload", dependencies=[Depends(require_login)])
 def upload(body: UploadIn):
-    """Runner log -> FIT with elevation (+ heart rate) -> intervals.icu activity."""
+    """Runner log -> FIT with elevation, HR and calorie estimate -> intervals.icu activity,
+    then RPE / feel / carbs / description (note + vertical speed per block) on the activity."""
     log = body.log
     try:
         samples = samples_from_log(log)
         start = datetime.fromisoformat(str(log["started_at"]).replace("Z", "+00:00"))
+        fb = parse_feedback(log.get("feedback"))
     except (KeyError, ValueError, TypeError) as exc:
         raise HTTPException(422, f"bad log: {exc}")
+    blocks = log.get("blocks") if isinstance(log.get("blocks"), list) else []
+    try:
+        stats = block_stats(samples, blocks)
+    except (KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(422, f"bad blocks: {exc}")
+
+    cl = client()
+    weight = body_weight_kg(cl)
+    kcal = estimate_kcal(samples, weight) if weight else None
+    description = build_description(fb, stats, len(samples), kcal)
+
     with tempfile.TemporaryDirectory() as tmp:
         fit = Path(tmp) / "kiekerun.fit"
-        tot = write_fit(samples, fit, start=start)
+        tot = write_fit(samples, fit, start=start, calories=kcal)
         res = _intervals_call(
-            client().upload_activity, fit, name=log.get("name"),
+            cl.upload_activity, fit, name=log.get("name"),
             external_id=f"kiekerun-{start.astimezone(timezone.utc):%Y%m%dT%H%M%S}",
             paired_event_id=body.paired_event_id, device_name="KiekeRun")
-    return {"ok": True, "totals": tot, "intervals": res}
+
+    fields = {}
+    if fb.rpe:
+        fields["icu_rpe"] = fb.rpe
+    if fb.feel:
+        fields["feel"] = fb.feel
+    if fb.carbs_total:
+        fields["carbs_ingested"] = fb.carbs_total
+    if description:
+        fields["description"] = description
+    acts = (res or {}).get("activities") or []
+    update_error = None
+    if acts and fields:  # no id = intervals.icu saw a duplicate file; nothing to update
+        try:
+            cl.update_activity(acts[0]["id"], fields)
+        except IntervalsError as exc:  # the upload itself succeeded, so report instead of failing
+            update_error = str(exc)
+    return {"ok": True, "totals": tot, "calories": kcal, "updated": sorted(fields), "update_error": update_error,
+            "intervals": res}

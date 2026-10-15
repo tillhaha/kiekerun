@@ -151,3 +151,103 @@ def test_upload_builds_fit_and_pairs_event(make):
 def test_upload_rejects_bad_log(make):
     c, _ = make({})
     assert c.post("/api/upload", json={"log": {"events": []}}, headers=AUTH).status_code == 422
+
+
+def _log(**extra):
+    base = {"version": 1, "name": "Test", "started_at": "2026-10-20T12:00:00Z", "duration_s": 60,
+            "events": [{"t": 0, "speed": 5, "incline": 20}], "hr": [],
+            "blocks": [{"label": "Hike", "t0": 0, "dur": 60}]}
+    base.update(extra)
+    return base
+
+
+def _routes(put=None, weight=70, activities=({"id": "i77"},)):
+    r = {("POST", "/activities"): FakeResp(201, {"activities": list(activities)}),
+         ("PUT_ACT", ""): put}
+    if weight:
+        r[("GET", "")] = FakeResp(200, {"id": "i1", "icu_weight": weight})
+    return r
+
+
+class ActHttp(FakeHttp):
+    """FakeHttp that also answers the non-athlete PUT /activity/{id} and records it."""
+    def __init__(self, routes, put_status=200):
+        super().__init__(routes)
+        self.puts, self.put_status = [], put_status
+
+    def request(self, method, url, **kw):
+        if method == "PUT" and "/activity/" in url:
+            self.puts.append((url, kw["json"]))
+            return FakeResp(self.put_status, {"id": "i77"} if self.put_status < 400 else {"error": "boom"})
+        return super().request(method, url, **kw)
+
+
+@pytest.fixture
+def make2(monkeypatch):
+    monkeypatch.setenv("KIEKERUN_USER", "tito")
+    monkeypatch.setenv("KIEKERUN_PASSWORD", "secret")
+    monkeypatch.delenv("BODY_WEIGHT_KG", raising=False)
+
+    def _make(routes, put_status=200):
+        http = ActHttp(routes, put_status)
+        monkeypatch.setattr(appmod, "client", lambda: IntervalsClient("k", "i1", http=http))
+        return TestClient(appmod.app), http
+    return _make
+
+
+def test_upload_applies_feedback_description_and_calories(make2):
+    fb = {"rpe": 8, "feel": 2, "note": "Beine schwer", "carbs": [[10, 25], [40, 25]]}
+    c, http = make2(_routes())
+    r = c.post("/api/upload", json={"log": _log(feedback=fb), "paired_event_id": 3}, headers=AUTH).json()
+    assert r["ok"] and r["calories"] and r["update_error"] is None
+    assert r["updated"] == ["carbs_ingested", "description", "feel", "icu_rpe"]
+    (url, fields), = http.puts
+    assert url.endswith("/api/v1/activity/i77")
+    assert (fields["icu_rpe"], fields["feel"], fields["carbs_ingested"]) == (8, 2, 50)
+    assert fields["description"].startswith("Beine schwer") and "Hike" in fields["description"]
+    assert f"Calories ~{r['calories']} kcal" in fields["description"]
+
+
+def test_upload_with_nothing_to_add_does_not_call_put(make2):
+    c, http = make2(_routes(weight=None))  # no feedback, no blocks, no weight -> nothing to write
+    log = _log(); log.pop("blocks")
+    r = c.post("/api/upload", json={"log": log}, headers=AUTH).json()
+    assert r["ok"] and r["updated"] == [] and http.puts == []
+
+
+def test_upload_with_weight_only_writes_calorie_estimate_description(make2):
+    c, http = make2(_routes())
+    log = _log(); log.pop("blocks")
+    r = c.post("/api/upload", json={"log": log}, headers=AUTH).json()
+    assert r["updated"] == ["description"]
+    assert http.puts[0][1]["description"].startswith("Calories ~")
+
+
+def test_upload_survives_failed_update_and_reports_it(make2):
+    c, http = make2(_routes(), put_status=500)
+    r = c.post("/api/upload", json={"log": _log(feedback={"rpe": 5})}, headers=AUTH).json()
+    assert r["ok"] and "500" in r["update_error"]
+
+
+def test_upload_without_weight_skips_calories(make2):
+    c, _ = make2(_routes(weight=None))
+    r = c.post("/api/upload", json={"log": _log(feedback={"rpe": 5})}, headers=AUTH).json()
+    assert r["calories"] is None
+
+
+def test_upload_weight_falls_back_to_env(make2, monkeypatch):
+    monkeypatch.setenv("BODY_WEIGHT_KG", "80")
+    c, _ = make2(_routes(weight=None))
+    assert c.post("/api/upload", json={"log": _log()}, headers=AUTH).json()["calories"] > 0
+
+
+def test_upload_duplicate_has_no_id_and_no_update(make2):
+    c, http = make2(_routes(activities=()))
+    r = c.post("/api/upload", json={"log": _log(feedback={"rpe": 5})}, headers=AUTH).json()
+    assert r["ok"] and r["update_error"] is None and http.puts == []
+
+
+def test_upload_rejects_bad_feedback(make2):
+    c, _ = make2(_routes())
+    assert c.post("/api/upload", json={"log": _log(feedback={"rpe": 11})}, headers=AUTH).status_code == 422
+    assert c.post("/api/upload", json={"log": _log(blocks=[{"label": "x"}])}, headers=AUTH).status_code == 422

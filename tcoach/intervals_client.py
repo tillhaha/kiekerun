@@ -52,13 +52,16 @@ class IntervalsClient:
         return cls(os.environ.get("INTERVALS_API_KEY", ""), os.environ.get("INTERVALS_ATHLETE_ID", "0"), http=http)
 
     def _call(self, method: str, path: str, **kwargs):
-        url = f"{self.base_url}/athlete/{self.athlete_id}{path}"
+        return self._request(method, f"{self.base_url}/athlete/{self.athlete_id}{path}", f"/athlete{path or ''}", **kwargs)
+
+    def _request(self, method: str, url: str, label: str, **kwargs):
+        path = label
         try:
             resp = self.http.request(method, url, auth=("API_KEY", self.api_key), timeout=30, **kwargs)
         except requests.RequestException as exc:
             raise IntervalsError(f"{method} {path} failed: {exc.__class__.__name__}") from exc
         if resp.status_code in (401, 403):
-            raise IntervalsError(f"{method} /athlete{path or ''} -> {resp.status_code}: API key or athlete id rejected", resp.status_code)
+            raise IntervalsError(f"{method} {path} -> {resp.status_code}: API key or athlete id rejected", resp.status_code)
         if resp.status_code >= 400:
             raise IntervalsError(f"{method} {path} -> {resp.status_code}: {resp.text[:300]}", resp.status_code)
         return resp.json() if resp.content else None
@@ -112,6 +115,10 @@ class IntervalsClient:
         return out
 
     # --- activities -------------------------------------------------------
+    def update_activity(self, activity_id: str, fields: dict) -> dict:
+        """Partial update (icu_rpe, feel, description, carbs_ingested, ...). Not athlete-scoped in the API."""
+        return self._request("PUT", f"{self.base_url}/activity/{activity_id}", f"/activity/{activity_id}", json=fields)
+
     def upload_activity(self, fit_path, name: str | None = None, description: str | None = None,
                         external_id: str | None = None, paired_event_id: int | None = None,
                         device_name: str | None = None, dry_run: bool = False) -> dict:

@@ -204,7 +204,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .chartpanel{padding:12px}
 [data-theme="night"] .chartpanel{padding:12px 0 0}
 #tl{flex:1;min-height:0}
-.controls{display:grid;grid-template-rows:auto 1fr 1fr;gap:10px;min-height:0}
+.controls{display:grid;grid-template-rows:auto 1fr 1fr auto;gap:10px;min-height:0}
 .controls button{height:auto;min-height:52px}
 .controls #pause{font-size:24px}
 .ctrl2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -229,11 +229,20 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 #dchart{flex:1;min-height:0}
 pre.log{flex:1;min-height:70px;max-height:220px;overflow:auto;background:var(--bg);border:1px solid var(--line);padding:10px;border-radius:var(--r);font-size:11px;white-space:pre-wrap;word-break:break-all;margin:0;color:var(--muted)}
 .export{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:auto}
-.export #up{grid-column:1/-1}
+.export #up,.export #fbbtn2{grid-column:1/-1}
 #todaybtn{width:100%}
 #todaymsg,#upmsg{overflow-wrap:anywhere}
 #upmsg a{color:inherit;text-decoration:underline;margin-left:4px}
 
+/* feedback modal */
+#fbmodal .card{width:min(560px,100%);max-height:92vh;overflow:auto}
+.fbsec{display:flex;flex-direction:column;gap:6px}
+.seg{display:grid;gap:6px}
+.seg button{height:44px;padding:0 4px;font-size:16px;letter-spacing:.04em}
+.seg.rpe{grid-template-columns:repeat(10,1fr)}.seg.feel{grid-template-columns:repeat(5,1fr)}.seg.carb{grid-template-columns:repeat(4,1fr)}
+.seg button.sel{background:var(--primary);color:var(--primary-ink);border-color:transparent}
+#fbnote{height:96px;min-height:96px;margin-top:0;resize:vertical}
+button.has{border-color:var(--highlight);box-shadow:inset 0 -3px 0 var(--highlight)}
 /* modal */
 .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
 label.chk{display:flex;gap:8px;align-items:center;font-size:14px}
@@ -281,6 +290,18 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     </div>
     <h3 class="lbl" style="margin-top:6px">Treadmill</h3>
     <label class="chk"><input type="checkbox" id="btuse" checked> send speed and incline to treadmill when connected</label>
+  </div></div>
+
+  <div class="modal" id="fbmodal" hidden role="dialog" aria-modal="true" aria-label="Workout-Feedback"><div class="card">
+    <div class="phead"><h3 class="lbl">Workout-Feedback</h3><button id="fbclose">Done</button></div>
+    <div class="fbsec"><span class="lbl">RPE <span class="muted">1 very easy · 10 maximal</span></span><div class="seg rpe" id="fbrpe"></div></div>
+    <div class="fbsec"><span class="lbl">Feel</span><div class="seg feel" id="fbfeel"></div></div>
+    <div class="fbsec"><span class="lbl">Carbs taken</span>
+      <div class="seg carb"><button data-g="10">+10 g</button><button data-g="25">+25 g</button><button data-g="40">+40 g</button><button class="ghost" id="fbundo">Undo</button></div>
+      <div class="muted" id="fbcarbtxt">0 g</div></div>
+    <div class="fbsec"><span class="lbl">Note</span>
+      <textarea id="fbnote" spellcheck="true" placeholder="How did it go?"></textarea>
+      <div class="row"><button id="fbmic" hidden>Speak</button><span class="muted" id="fbmicmsg"></span></div></div>
   </div></div>
 
   <!-- 1 · Plan -->
@@ -351,6 +372,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <div class="mach"><b>Treadmill</b><span id="mach">not connected</span></div>
         <button class="pri" id="pause">Pause</button>
         <div class="ctrl2"><button id="skip">Skip</button><button class="ghost" id="stop" disabled title="Pause first, then finish">Finish</button></div>
+        <button id="fbbtn">Workout-Feedback</button>
       </div>
     </div>
     <div class="bar overall"><i id="prog"></i></div>
@@ -365,11 +387,12 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="card"><h2 class="lbl">Planned vs actual</h2><div id="dchart"></div></div>
       <div class="card">
         <h2 class="lbl">Export</h2>
-        <div class="muted">Upload sends this session to intervals.icu with elevation and heart rate. Download keeps the raw log.</div>
+        <div class="muted">Add your feedback, then upload: the session goes to intervals.icu with elevation, heart rate, a calorie estimate and your feedback. Download keeps the raw log.</div>
         <pre class="log" id="logout"></pre>
+        <div class="muted" id="fbsum"></div>
         <div class="muted" id="upmsg"></div>
         <div class="muted" id="copied"></div>
-        <div class="export"><button class="pri" id="up">Upload to intervals.icu</button><button id="dl">Download</button><button id="copy">Copy</button><button class="ghost" id="again">New</button></div>
+        <div class="export"><button id="fbbtn2">Workout-Feedback</button><button class="pri" id="up">Upload to intervals.icu</button><button id="dl">Download</button><button id="copy">Copy</button><button class="ghost" id="again">New</button></div>
       </div>
     </div>
   </section>
@@ -500,6 +523,45 @@ const am=$("alertmodal");$("alertbtn").onclick=()=>{am.hidden=false};$("alertclo
 am.onclick=e=>{if(e.target===am)am.hidden=true};document.addEventListener("keydown",e=>{if(e.key==="Escape")am.hidden=true});
 $("btcon").onclick=()=>{if(BLE.cp&&BLE.dev){BLE.dev.gatt.disconnect()}else BLE.connect()};
 
+// ---- workout feedback (RPE, feel, carbs, note) -> log.feedback -> intervals.icu
+const SPEECH_LANG="de-DE";
+const FEEL=[[1,"Strong"],[2,"Good"],[3,"Normal"],[4,"Poor"],[5,"Weak"]];
+let FB={rpe:null,feel:null,note:"",carbs:[]},LAST_LOG=null,rec=null;
+const fbT=()=>S?Math.round(elapsed()):(LAST_LOG?LAST_LOG.duration_s:0);
+const fbCarbs=()=>FB.carbs.reduce((a,c)=>a+c[1],0);
+function fbOut(){const o={};if(FB.rpe)o.rpe=FB.rpe;if(FB.feel)o.feel=FB.feel;const n=FB.note.trim();if(n)o.note=n;if(FB.carbs.length)o.carbs=FB.carbs;return o}
+function refreshLog(){if(!LAST_LOG)return;const o=fbOut();if(Object.keys(o).length)LAST_LOG.feedback=o;else delete LAST_LOG.feedback;$("logout").textContent=JSON.stringify(LAST_LOG)}
+function fbSummary(){const p=[];if(FB.rpe)p.push("RPE "+FB.rpe);if(FB.feel)p.push(FEEL.find(f=>f[0]===FB.feel)[1]);if(FB.carbs.length)p.push(fbCarbs()+" g carbs");if(FB.note.trim())p.push("note");return p.join(" · ")}
+function renderFB(){
+ document.querySelectorAll("#fbrpe button").forEach(b=>b.classList.toggle("sel",+b.dataset.v===FB.rpe));
+ document.querySelectorAll("#fbfeel button").forEach(b=>b.classList.toggle("sel",+b.dataset.v===FB.feel));
+ const t=fbT(),g=fbCarbs();
+ $("fbcarbtxt").textContent=g+" g"+(t>=600&&g?" · "+Math.round(g/(t/3600))+" g/h":"")+(FB.carbs.length?" · last at "+fmt(FB.carbs[FB.carbs.length-1][0]):"");
+ $("fbundo").disabled=!FB.carbs.length;
+ const s=fbSummary();$("fbsum").textContent=s?"Feedback: "+s:"No feedback yet.";
+ ["fbbtn","fbbtn2"].forEach(id=>$(id).classList.toggle("has",!!s))}
+function fbChanged(){renderFB();refreshLog()}
+for(let i=1;i<=10;i++){const b=document.createElement("button");b.textContent=i;b.dataset.v=i;b.onclick=()=>{FB.rpe=FB.rpe===i?null:i;fbChanged()};$("fbrpe").appendChild(b)}
+FEEL.forEach(([v,l])=>{const b=document.createElement("button");b.textContent=l;b.dataset.v=v;b.onclick=()=>{FB.feel=FB.feel===v?null:v;fbChanged()};$("fbfeel").appendChild(b)});
+document.querySelectorAll("#fbmodal [data-g]").forEach(b=>b.onclick=()=>{FB.carbs.push([fbT(),+b.dataset.g]);fbChanged()});
+$("fbundo").onclick=()=>{FB.carbs.pop();fbChanged()};
+$("fbnote").oninput=()=>{FB.note=$("fbnote").value;fbChanged()};
+const fbm=$("fbmodal");
+function openFB(){$("fbnote").value=FB.note;renderFB();fbm.hidden=false}
+function closeFB(){if(rec)rec.stop();fbm.hidden=true}
+$("fbbtn").onclick=$("fbbtn2").onclick=openFB;$("fbclose").onclick=closeFB;
+fbm.onclick=e=>{if(e.target===fbm)closeFB()};document.addEventListener("keydown",e=>{if(e.key==="Escape")closeFB()});
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR)$("fbmic").hidden=false;else $("fbmicmsg").textContent="Tip: dictate with the microphone key on the keyboard.";
+$("fbmic").onclick=()=>{if(rec){rec.stop();return}
+ const base=$("fbnote").value.replace(/\s+$/,"");let fin="";
+ rec=new SR();rec.lang=SPEECH_LANG;rec.continuous=true;rec.interimResults=true;
+ rec.onresult=e=>{let interim="";for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+" ";else interim+=r[0].transcript}
+  $("fbnote").value=(base?base+" ":"")+fin+interim;FB.note=$("fbnote").value;fbChanged()};
+ rec.onerror=e=>{$("fbmicmsg").textContent=(e.error==="not-allowed"||e.error==="service-not-allowed")?"Microphone not allowed. Use the keyboard's microphone key instead.":"Speech input: "+e.error};
+ rec.onend=()=>{rec=null;$("fbmic").textContent="Speak"};
+ $("fbmicmsg").textContent="";$("fbmic").textContent="Stop";
+ try{rec.start()}catch(e){rec=null;$("fbmic").textContent="Speak"}};
 // ---- intervals.icu bridge (backend routes under /api, same origin, browser login)
 async function API(path,opt){let r;try{r=await fetch(path,opt)}catch(e){throw Error("backend not reachable"+(location.protocol==="file:"?" (open the page from the server, not as a file)":""))}
  let j=null;try{j=await r.json()}catch(e){}
@@ -555,6 +617,7 @@ function curIdx(e){let i=0;while(i+1<B.length&&e>=B[i+1].t0)i++;return i}
 function logEv(){S.events.push({t:Math.round(elapsed()*10)/10,speed:S.speed,incline:S.incline})}
 function setBlockVals(i){S.speed=B[i].speed;S.incline=B[i].incline}
 $("start").onclick=()=>{try{localStorage.setItem("tc_json",$("json").value)}catch(e){}
+ FB={rpe:null,feel:null,note:"",carbs:[]};LAST_LOG=null;$("fbnote").value="";renderFB();
  try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){AC=null}
  try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(l=>wl=l).catch(()=>{})}catch(e){}
  S={hr:[],t0:Date.now(),started:new Date().toISOString(),pausedMs:0,paused:false,skip:0,idx:-1,events:[],alerted:-1,lead:+$("lead").value||10,speed:B[0].speed,incline:B[0].incline,end:B.reduce((a,b)=>a+b.dur,0)};
@@ -596,18 +659,18 @@ $("skip").onclick=()=>{if(!S||S.paused||S.hold)return;const e=elapsed(),i=curIdx
 $("stop").onclick=()=>S&&finish(true);
 function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);clearInterval(hrt);BLE.stop();try{wl&&wl.release()}catch(x){}
  if(!early)beep(4,1319);vib([500,150,500]);
- const log={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc}};
+ const log={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,blocks:B.map(b=>({label:b.label,t0:b.t0,dur:b.dur})),machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc}};
  const km=S.events.reduce((a,ev,k)=>a+ev.speed*Math.max(0,((k+1<S.events.length?S.events[k+1].t:e)-ev.t))/3600,0);
  show("done");
  $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").textContent="";$("upmsg").style.color="";
  renderSummary(log,e,km);
- $("logout").textContent=JSON.stringify(log);S=null}
+ LAST_LOG=log;S=null;refreshLog();renderFB()}
 $("copy").onclick=async()=>{const t=$("logout").textContent;try{await navigator.clipboard.writeText(t);$("copied").textContent="Copied."}catch(e){const r=document.createRange();r.selectNodeContents($("logout"));const s=getSelection();s.removeAllRanges();s.addRange(r);$("copied").textContent="Select-all done — copy manually."}};
 $("again").onclick=()=>show("setup");
 $("up").onclick=async()=>{const t=$("logout").textContent;if(!t)return;const b=$("up"),m=$("upmsg");b.disabled=true;m.style.color="";m.textContent="Uploading…";
  try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED})});
   const a0=d.intervals&&d.intervals.activities&&d.intervals.activities[0],id=a0&&a0.id;
-  if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded"}
+  if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded";if(d.calories)m.append(" · ~"+d.calories+" kcal (estimate)");if(d.update_error)m.append(" · Feedback fields not saved: "+d.update_error)}
   else{m.textContent="intervals.icu created no new activity (this session was probably uploaded already).";b.textContent="Already uploaded"}
  }catch(e){m.textContent="Upload failed: "+e.message;m.style.color="var(--alert-tint-ink)";b.disabled=false}};
 $("dl").onclick=()=>{const t=$("logout").textContent;if(!t)return;const a=document.createElement("a"),nm=(JSON.parse(t).started_at||"log").slice(0,16).replace(/[:T]/g,"-");

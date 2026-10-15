@@ -23,7 +23,7 @@ def _ms(dt: datetime) -> int:
 
 
 def write_fit(samples: list[Sample], path, start: datetime | None = None,
-              start_altitude_m: float = 0.0) -> dict:
+              start_altitude_m: float = 0.0, calories: int | None = None) -> dict:
     """Write samples to `path`; returns the totals dict (distance, ascent, ...)."""
     if not samples:
         raise ValueError("no samples")
@@ -86,6 +86,8 @@ def write_fit(samples: list[Sample], path, start: datetime | None = None,
         m.sub_sport = SubSport.TREADMILL
         m.avg_speed = tot["distance_m"] / len(samples)
         m.max_speed = max(speeds)
+        if calories:
+            m.total_calories = int(calories)
         if hrs:
             m.avg_heart_rate = int(round(sum(hrs) / len(hrs)))
             m.max_heart_rate = max(hrs)
