@@ -1,0 +1,36 @@
+{
+ "name": "Power hike 3x12 climb",
+ "notes": "Climb mode for the main set (switch on the console). Poles-style arm drive, no handrail.",
+ "blocks": [
+  {
+   "label": "Warm-up",
+   "duration": "8:00",
+   "speed": 5.0,
+   "incline": 10
+  },
+  {
+   "repeat": 3,
+   "label": "Main set",
+   "blocks": [
+    {
+     "label": "Steep",
+     "duration": "12:00",
+     "speed": 5.0,
+     "incline": 30
+    },
+    {
+     "label": "Recover",
+     "duration": "3:00",
+     "speed": 4.0,
+     "incline": 15
+    }
+   ]
+  },
+  {
+   "label": "Cool-down",
+   "duration": "5:00",
+   "speed": 5.0,
+   "incline": 3
+  }
+ ]
+}

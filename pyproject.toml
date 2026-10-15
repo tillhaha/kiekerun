@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tcoach"
+version = "0.1.0"
+description = "Treadmill coach toolkit: workouts -> intervals.icu, simulated treadmill, session log -> FIT with elevation"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31", "fit-tool>=0.9.13"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+tcoach = "tcoach.cli:main"
+
+[tool.setuptools]
+packages = ["tcoach"]

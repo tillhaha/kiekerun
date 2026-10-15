@@ -1,0 +1,55 @@
+{
+ "name": "Control test 1min",
+ "date": "2026-10-14",
+ "notes": "Bluetooth control test: six 10 s steps with different speed and incline inside one minute. Low speeds, belt supervised. Set the heads-up to 3 s.",
+ "blocks": [
+  {
+   "label": "Warm-up",
+   "duration": "1m",
+   "speed": 3,
+   "incline": 0
+  },
+  {
+   "label": "Step 1",
+   "duration": "10s",
+   "speed": 4,
+   "incline": 5
+  },
+  {
+   "label": "Step 2",
+   "duration": "10s",
+   "speed": 5,
+   "incline": 10
+  },
+  {
+   "label": "Step 3",
+   "duration": "10s",
+   "speed": 6,
+   "incline": 15
+  },
+  {
+   "label": "Step 4",
+   "duration": "10s",
+   "speed": 5,
+   "incline": 8
+  },
+  {
+   "label": "Step 5",
+   "duration": "10s",
+   "speed": 4,
+   "incline": 3
+  },
+  {
+   "label": "Step 6",
+   "duration": "10s",
+   "speed": 3,
+   "incline": 0
+  },
+  {
+   "label": "Cool-down",
+   "duration": "1m",
+   "speed": 3,
+   "incline": 0
+  }
+ ]
+}

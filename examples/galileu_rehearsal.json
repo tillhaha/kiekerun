@@ -1,0 +1,49 @@
+{
+ "name": "Galileu Rehearsal",
+ "date": "2026-10-14",
+ "notes": "Puig Galileu simulation, taper. Option B: hold the grade, 5 km/h. HR cap 150. Fuel test: 1 portion V3 around minute 15 of the main block.",
+ "blocks": [
+  {
+   "label": "Warm-up easy walk",
+   "duration": "10m",
+   "speed": 4.5,
+   "incline": 5
+  },
+  {
+   "label": "Galileu climb A",
+   "duration": "10m",
+   "speed": 5,
+   "incline": 25
+  },
+  {
+   "label": "Galileu climb B",
+   "duration": "10m",
+   "speed": 5,
+   "incline": 28
+  },
+  {
+   "label": "Galileu climb C",
+   "duration": "10m",
+   "speed": 5,
+   "incline": 30
+  },
+  {
+   "label": "Flat transition",
+   "duration": "5m",
+   "speed": 4.5,
+   "incline": 0
+  },
+  {
+   "label": "Mini steep section",
+   "duration": "10m",
+   "speed": 5,
+   "incline": 20
+  },
+  {
+   "label": "Cool-down",
+   "duration": "10m",
+   "speed": 4.5,
+   "incline": 2
+  }
+ ]
+}

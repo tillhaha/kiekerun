@@ -1,0 +1,36 @@
+{
+ "name": "Uphill threshold 4x8",
+ "notes": "Threshold effort by HR/RPE, not pace. Incline is the stimulus.",
+ "blocks": [
+  {
+   "label": "Warm-up",
+   "duration": "10:00",
+   "speed": 8.0,
+   "incline": 2
+  },
+  {
+   "repeat": 4,
+   "label": "Main set",
+   "blocks": [
+    {
+     "label": "Hard",
+     "duration": "8:00",
+     "speed": 10.5,
+     "incline": 6
+    },
+    {
+     "label": "Easy",
+     "duration": "3:00",
+     "speed": 6.0,
+     "incline": 2
+    }
+   ]
+  },
+  {
+   "label": "Cool-down",
+   "duration": "8:00",
+   "speed": 6.0,
+   "incline": 0
+  }
+ ]
+}
