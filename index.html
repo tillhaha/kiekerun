@@ -72,7 +72,7 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .steps span.on{background:var(--ink);color:var(--bg);border-color:transparent}
 [data-theme="night"] .steps span.on{background:var(--highlight);color:var(--highlight-ink)}
 .tools{display:flex;justify-content:flex-end;align-items:center;gap:8px}
-#clock{font:600 20px var(--fd);color:var(--ink);min-width:58px;text-align:right;font-variant-numeric:tabular-nums}
+#clock{font:600 20px var(--fd);color:var(--ink);white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
 #btstat{padding:8px 14px;background:var(--alert-tint);color:var(--alert-tint-ink);border-radius:var(--r);font-size:13px}
 #btstat.info{background:var(--surface-2);color:var(--muted)}
 
@@ -159,7 +159,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 [data-theme="volt"] .dot{background:var(--ink);box-shadow:0 0 0 3px var(--highlight)}
 
 /* ---------- 2 · Run ---------- */
-.run-screen{grid-template-rows:auto minmax(0,1fr) auto minmax(176px,.6fr)}
+.run-screen{grid-template-rows:auto minmax(0,1fr) auto minmax(130px,.6fr)}
 .toprow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:12px}
 .banner{display:flex;align-items:center;gap:16px;min-height:72px;padding:10px 24px;border-radius:var(--r);background:var(--surface);color:var(--ink);
   font:700 clamp(24px,3.6vw,42px)/1.05 var(--fd);letter-spacing:.03em;text-transform:uppercase;font-style:var(--num-style);transition:background .15s}
@@ -205,8 +205,8 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .chartpanel{padding:12px}
 [data-theme="night"] .chartpanel{padding:12px 0 0}
 #tl{flex:1;min-height:0}
-.controls{display:grid;grid-template-rows:auto 1fr 1fr auto;gap:8px;min-height:0}
-.controls button{height:auto;min-height:44px}
+.controls{display:grid;grid-template-rows:auto 1fr 1fr;gap:10px;min-height:0}
+.controls button{height:auto;min-height:52px}
 .controls #pause{font-size:24px}
 .ctrl2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 #stop:not(:disabled){background:var(--alert);color:var(--alert-ink);border-color:transparent}
@@ -244,6 +244,8 @@ pre.log{flex:1;min-height:70px;max-height:220px;overflow:auto;background:var(--b
 .seg button.sel{background:var(--primary);color:var(--primary-ink);border-color:transparent}
 #fbnote{height:96px;min-height:96px;margin-top:0;resize:vertical}
 button.has{border-color:var(--highlight);box-shadow:inset 0 -3px 0 var(--highlight)}
+.fbfoot{display:flex;justify-content:flex-end;margin-top:4px}
+button.hl{background:var(--highlight);color:var(--highlight-ink);border-color:transparent;padding:0 40px}
 /* modal */
 .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
 label.chk{display:flex;gap:8px;align-items:center;font-size:14px}
@@ -273,11 +275,11 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div class="brand"><i class="mark"></i>KiekeRun</div>
     <nav class="steps"><span id="st-setup" class="on">1. Plan</span><span id="st-run">2. Run</span><span id="st-done">3. Summary</span></nav>
     <div class="tools">
+      <span id="clock"></span>
       <button class="icon" id="themebtn" title="Switch light / dark" aria-label="Switch light or dark theme"><svg viewBox="0 0 24 24"><path id="themeic" d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></button>
       <button class="pill" id="btcon" title="Connect treadmill (Bluetooth)" aria-label="Connect treadmill via Bluetooth"><svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg><span id="btlbl">Treadmill</span></button>
       <button class="pill" id="hrcon" title="Connect heart-rate strap (Bluetooth)" aria-label="Connect heart-rate strap via Bluetooth"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 00-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 000-7.8z"/></svg><span id="hrlbl">Heart rate</span></button>
       <button class="icon" id="alertbtn" title="Alert settings" aria-label="Alert settings"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 003.4 0"/></svg></button>
-      <span id="clock"></span>
     </div>
   </header>
   <div id="btstat" hidden></div>
@@ -294,7 +296,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
   </div></div>
 
   <div class="modal" id="fbmodal" hidden role="dialog" aria-modal="true" aria-label="Workout-Feedback"><div class="card">
-    <div class="phead"><h3 class="lbl">Workout-Feedback</h3><button id="fbclose">Done</button></div>
+    <div class="phead"><h3 class="lbl">Workout-Feedback</h3></div>
     <div class="fbsec"><span class="lbl">RPE <span class="muted">1 very easy · 10 maximal</span></span><div class="seg rpe" id="fbrpe"></div></div>
     <div class="fbsec"><span class="lbl">Feel</span><div class="seg feel" id="fbfeel"></div></div>
     <div class="fbsec"><span class="lbl">Carbs taken</span>
@@ -303,6 +305,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div class="fbsec"><span class="lbl">Note</span>
       <textarea id="fbnote" spellcheck="true" placeholder="How did it go?"></textarea>
       <div class="row"><button id="fbmic" hidden>Speak</button><span class="muted" id="fbmicmsg"></span></div></div>
+    <div class="fbfoot"><button class="hl" id="fbclose">Done</button></div>
   </div></div>
 
   <!-- 1 · Plan -->
@@ -373,7 +376,6 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <div class="mach"><b>Treadmill</b><span id="mach">not connected</span></div>
         <button class="pri" id="pause">Pause</button>
         <div class="ctrl2"><button id="skip">Skip</button><button class="ghost" id="stop" disabled title="Pause first, then finish">Finish</button></div>
-        <button id="fbbtn">Workout-Feedback</button>
       </div>
     </div>
     <div class="bar overall"><i id="prog"></i></div>
@@ -544,7 +546,7 @@ function renderFB(){
  $("fbcarbtxt").textContent=g+" g"+(t>=600&&g?" · "+Math.round(g/(t/3600))+" g/h":"")+(FB.carbs.length?" · last at "+fmt(FB.carbs[FB.carbs.length-1][0]):"");
  $("fbundo").disabled=!FB.carbs.length;
  const s=fbSummary();$("fbsum").textContent=s?"Feedback: "+s:"No feedback yet.";
- ["fbbtn","fbbtn2"].forEach(id=>$(id).classList.toggle("has",!!s))}
+ $("fbbtn2").classList.toggle("has",!!s)}
 function fbChanged(){renderFB();refreshLog()}
 for(let i=1;i<=10;i++){const b=document.createElement("button");b.textContent=i;b.dataset.v=i;b.onclick=()=>{FB.rpe=FB.rpe===i?null:i;fbChanged()};$("fbrpe").appendChild(b)}
 FEEL.forEach(([v,l])=>{const b=document.createElement("button");b.textContent=l;b.dataset.v=v;b.onclick=()=>{FB.feel=FB.feel===v?null:v;fbChanged()};$("fbfeel").appendChild(b)});
@@ -554,7 +556,7 @@ $("fbnote").oninput=()=>{FB.note=$("fbnote").value;fbChanged()};
 const fbm=$("fbmodal");
 function openFB(){$("fbnote").value=FB.note;renderFB();fbm.hidden=false}
 function closeFB(){if(rec)rec.stop();fbm.hidden=true}
-$("fbbtn").onclick=$("fbbtn2").onclick=openFB;$("fbclose").onclick=closeFB;
+$("fbbtn2").onclick=openFB;$("fbclose").onclick=closeFB;
 fbm.onclick=e=>{if(e.target===fbm)closeFB()};document.addEventListener("keydown",e=>{if(e.key==="Escape")closeFB()});
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(SR)$("fbmic").hidden=false;else $("fbmicmsg").textContent="Tip: dictate with the microphone key on the keyboard.";
