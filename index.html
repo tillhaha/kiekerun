@@ -159,7 +159,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 [data-theme="volt"] .dot{background:var(--ink);box-shadow:0 0 0 3px var(--highlight)}
 
 /* ---------- 2 · Run ---------- */
-.run-screen{grid-template-rows:auto minmax(0,1fr) auto minmax(130px,.6fr)}
+.run-screen{grid-template-rows:auto minmax(0,1fr) auto minmax(176px,.6fr)}
 .toprow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:12px}
 .banner{display:flex;align-items:center;gap:16px;min-height:72px;padding:10px 24px;border-radius:var(--r);background:var(--surface);color:var(--ink);
   font:700 clamp(24px,3.6vw,42px)/1.05 var(--fd);letter-spacing:.03em;text-transform:uppercase;font-style:var(--num-style);transition:background .15s}
@@ -205,8 +205,8 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .chartpanel{padding:12px}
 [data-theme="night"] .chartpanel{padding:12px 0 0}
 #tl{flex:1;min-height:0}
-.controls{display:grid;grid-template-rows:auto 1fr 1fr auto;gap:10px;min-height:0}
-.controls button{height:auto;min-height:52px}
+.controls{display:grid;grid-template-rows:auto 1fr 1fr auto;gap:8px;min-height:0}
+.controls button{height:auto;min-height:44px}
 .controls #pause{font-size:24px}
 .ctrl2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 #stop:not(:disabled){background:var(--alert);color:var(--alert-ink);border-color:transparent}
@@ -362,10 +362,10 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     </div>
     <div class="stats">
       <div class="stat"><span class="lbl">Elapsed</span><b id="el">0:00</b></div>
+      <div class="stat"><span class="lbl">Remaining</span><b id="rem">0:00</b></div>
       <div class="stat"><span class="lbl">Distance</span><b><span id="dist">0.00</span><small>km</small></b></div>
       <div class="stat"><span class="lbl">Elevation gain</span><b>+<span id="vert">0</span><small>m</small></b></div>
       <div class="stat"><span class="lbl">Heart rate</span><b><span id="hrv">–</span><small>bpm</small></b></div>
-      <div class="stat"><span class="lbl">Remaining</span><b id="rem">0:00</b></div>
     </div>
     <div class="bottom">
       <div class="card chartpanel"><div id="tl"></div></div>
