@@ -126,20 +126,21 @@ Outdoor-Einheiten laufen ohne KiekeRun: Kalender, Garmin Connect, Uhr, und die A
 | RPE, Gefühl, Karbs, Notiz | Tito | Feedback-Popup | `icu_rpe`, `feel`, `carbs_ingested`, `description` |
 | Outdoor-Lauf (Ist) | Garmin fenix 9 Pro | Garmin Connect, Sync | intervals.icu-Aktivität |
 | Wellness (HRV, Schlaf, Ruhepuls) | Garmin | Garmin Connect, Sync | intervals.icu-Wellness |
-| Alle Daten zurück zum Coach | intervals.icu | Backend-Connector `/mcp/<MCP_TOKEN>`, nur lesen | Claude |
+| Alle Daten zurück zum Coach | intervals.icu | Backend-Connector `/mcp/<MCP_TOKEN>`, lesend | Claude |
+| Plan vom Coach direkt in den Kalender | Claude | Connector-Tools `save_treadmill_workout`, `save_planned_workout`, `delete_planned_workout` (nur mit `MCP_ALLOW_WRITE=1`) | intervals.icu-Kalender |
 
 ## Zugang und Schutz
 
 | Zugang | Schutz |
 |---|---|
 | KiekeRun-Seite und `/api` | HTTP-Basic-Login (`KIEKERUN_USER`, `KIEKERUN_PASSWORD`), ohne gesetzte Variablen gesperrt (503) |
-| Coach-Connector `/mcp/<MCP_TOKEN>` | geheime URL (mind. 16 Zeichen), nur lesen, falscher Token liefert 404 |
+| Coach-Connector `/mcp/<MCP_TOKEN>` | geheime URL (mind. 16 Zeichen), falscher Token liefert 404. Standard nur lesen; Schreiben (nur geplante Workouts, löschen nur eigene, 30 pro Stunde) braucht `MCP_ALLOW_WRITE=1` |
 | Beide | Rate-Limit: 10 Fehlversuche in 15 Minuten sperren die Adresse für 15 Minuten (429); Connector auf 60 Anfragen pro Minute begrenzt |
 | intervals.icu | API-Key nur in Coolify (`INTERVALS_API_KEY`, `INTERVALS_ATHLETE_ID`), nie im Chat |
 | Client-Adresse | aus `X-Forwarded-For`, `TRUSTED_PROXY_HOPS` (Standard 1) |
 
 Mögliche nächste Schritte: OAuth statt geheimer URL für den Connector (Login, Token mit Ablauf, widerrufbar),
-Strava-Upload der Laufband-Einheiten direkt aus KiekeRun, Workouts über den Connector schreibbar machen.
+Strava-Upload der Laufband-Einheiten direkt aus KiekeRun.
 
 ## Hinweise
 

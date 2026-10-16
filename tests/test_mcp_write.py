@@ -1,0 +1,163 @@
+import json
+
+import pytest
+from fastapi.testclient import TestClient
+
+from server import app as appmod
+from server import mcp as mcpmod
+from tcoach.intervals_client import IntervalsClient
+
+TOKEN = "t" * 24
+GOOD_WORKOUT = {"name": "Uphill 2x", "blocks": [{"label": "Warm-up", "duration": "10:00", "speed": 6, "incline": 5},
+                                                  {"repeat": 2, "blocks": [{"label": "Up", "duration": "5:00", "speed": 5.5, "incline": 15},
+                                                                           {"label": "Easy", "duration": "2:00", "speed": 5, "incline": 3}]}]}
+
+
+class Resp:
+    def __init__(self, status=200, data=None):
+        self.status_code, self._d = status, data
+        self.content = b"x" if data is not None else b""
+        self.text = json.dumps(data)
+
+    def json(self):
+        return self._d
+
+
+class Cal:
+    """Tiny fake calendar behind the intervals.icu API; records every call."""
+    def __init__(self, events=None):
+        self.events = {e["id"]: dict(e) for e in (events or [])}
+        self.calls, self.next_id = [], 100
+
+    def request(self, method, url, **kw):
+        path = url.split("/athlete/i1", 1)[1] if "/athlete/i1" in url else url
+        self.calls.append((method, path))
+        if method == "GET" and path.startswith("/events/") and not path.endswith(".json"):
+            e = self.events.get(int(path.rsplit("/", 1)[1]))
+            return Resp(200, e) if e else Resp(404, {})
+        if method == "GET" and path == "/events":
+            p = kw["params"]
+            return Resp(200, [e for e in self.events.values() if p["oldest"] <= e["start_date_local"][:10] <= p["newest"]])
+        if method == "POST" and path == "/events":
+            self.next_id += 1
+            self.events[self.next_id] = {**kw["json"], "id": self.next_id}
+            return Resp(200, self.events[self.next_id])
+        if method == "PUT" and path.startswith("/events/"):
+            eid = int(path.rsplit("/", 1)[1])
+            self.events[eid] = {**self.events[eid], **kw["json"]}
+            return Resp(200, self.events[eid])
+        if method == "DELETE" and path.startswith("/events/"):
+            self.events.pop(int(path.rsplit("/", 1)[1]), None)
+            return Resp(200, None)
+        return Resp(404, {})
+
+
+@pytest.fixture
+def mk(monkeypatch):
+    monkeypatch.setenv("MCP_TOKEN", TOKEN)
+
+    def _mk(events=None, write=True):
+        if write:
+            monkeypatch.setenv("MCP_ALLOW_WRITE", "1")
+        cal = Cal(events)
+        monkeypatch.setattr(appmod, "client", lambda: IntervalsClient("k", "i1", http=cal))
+        monkeypatch.setattr(appmod, "today_local", lambda: "2026-10-16")
+        return TestClient(appmod.app), cal
+    return _mk
+
+
+def call(c, name, args):
+    r = c.post(f"/mcp/{TOKEN}", json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}}).json()
+    if "error" in r:
+        return r
+    res = r["result"]
+    txt = res["content"][0]["text"]
+    return {"isError": bool(res.get("isError")), "data": json.loads(txt) if not res.get("isError") else txt}
+
+
+def test_write_tools_hidden_and_refused_by_default(mk):
+    c, cal = mk(write=False)
+    tools = c.post(f"/mcp/{TOKEN}", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()["result"]["tools"]
+    assert [t["name"] for t in tools] == ["get_activities", "get_activity", "get_wellness", "get_plan_vs_actual"]
+    assert all(t["annotations"] == {"readOnlyHint": True} for t in tools)
+    r = call(c, "save_planned_workout", {"date": "2026-10-17", "name": "x"})
+    assert r["isError"] and "disabled" in r["data"] and not [x for x in cal.calls if x[0] != "GET"]
+
+
+def test_write_tools_listed_with_annotations_when_enabled(mk):
+    c, _ = mk()
+    tools = {t["name"]: t for t in c.post(f"/mcp/{TOKEN}", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()["result"]["tools"]}
+    assert set(tools) >= {"save_treadmill_workout", "save_planned_workout", "delete_planned_workout"}
+    assert tools["delete_planned_workout"]["annotations"]["destructiveHint"] is True
+    assert tools["save_planned_workout"]["annotations"]["readOnlyHint"] is False
+
+
+def test_save_treadmill_workout_creates_then_updates(mk):
+    c, cal = mk()
+    r = call(c, "save_treadmill_workout", {"date": "2026-10-17", "workout": GOOD_WORKOUT})
+    assert not r["isError"] and r["data"]["saved"] and r["data"]["duration_min"] == 24.0
+    ev = cal.events[r["data"]["event_id"]]
+    assert ev["external_id"].startswith("tcoach-2026-10-17-") and "incline 15pct" in ev["description"]
+    r2 = call(c, "save_treadmill_workout", {"date": "2026-10-17", "workout": GOOD_WORKOUT})
+    assert r2["data"]["event_id"] == r["data"]["event_id"] and len(cal.events) == 1
+
+
+def test_save_treadmill_workout_rejects_machine_limit_and_bad_input(mk):
+    c, cal = mk()
+    bad = {"name": "x", "blocks": [{"label": "a", "duration": "1:00", "speed": 15, "incline": 30}]}
+    assert call(c, "save_treadmill_workout", {"date": "2026-10-17", "workout": bad})["isError"]
+    assert call(c, "save_treadmill_workout", {"date": "2026-10-17", "workout": "nope"})["isError"]
+    assert call(c, "save_treadmill_workout", {"date": "2026-10-17", "workout": {"name": "x", "blocks": [{"label": "a"}]}})["isError"]
+    assert not cal.events
+
+
+def test_save_planned_workout_idempotent_and_fields(mk):
+    c, cal = mk()
+    args = {"date": "2026-10-20", "name": "Fuel Rehearsal", "type": "VirtualRun", "description": "- 60m Z2 Pace",
+            "duration_min": 60, "load": 70, "carbs_per_h": 75}
+    r = call(c, "save_planned_workout", args)
+    ev = cal.events[r["data"]["event_id"]]
+    assert r["data"]["updated_existing"] is False
+    assert (ev["category"], ev["type"], ev["moving_time"], ev["icu_training_load"], ev["carbs_per_hour"]) == ("WORKOUT", "VirtualRun", 3600, 70, 75)
+    assert ev["external_id"] == "coach-2026-10-20-fuel-rehearsal" and ev["start_date_local"] == "2026-10-20T00:00:00"
+    r2 = call(c, "save_planned_workout", {**args, "description": "- 45m Z2 Pace"})
+    assert r2["data"]["updated_existing"] is True and r2["data"]["event_id"] == r["data"]["event_id"]
+    assert len(cal.events) == 1 and cal.events[r["data"]["event_id"]]["description"] == "- 45m Z2 Pace"
+
+
+@pytest.mark.parametrize("args", [
+    {"date": "2026-10-14", "name": "x"}, {"date": "2028-01-01", "name": "x"}, {"date": "17.10.2026", "name": "x"},
+    {"date": "2026-10-17", "name": ""}, {"date": "2026-10-17", "name": "x" * 121}, {"date": "2026-10-17", "name": "x", "type": "Rocket"},
+    {"date": "2026-10-17", "name": "x", "duration_min": 0}, {"date": "2026-10-17", "name": "x", "duration_min": "60"},
+    {"date": "2026-10-17", "name": "x", "load": 1e9}, {"date": "2026-10-17", "name": "x", "carbs_per_h": 500},
+    {"date": "2026-10-17", "name": "x", "description": "y" * 5001},
+])
+def test_save_planned_workout_validation(mk, args):
+    c, cal = mk()
+    assert call(c, "save_planned_workout", args)["isError"]
+    assert not cal.events
+
+
+def test_delete_only_own_future_workouts(mk):
+    events = [
+        {"id": 1, "category": "WORKOUT", "external_id": "coach-2026-10-20-x", "name": "mine", "start_date_local": "2026-10-20T00:00:00"},
+        {"id": 2, "category": "WORKOUT", "external_id": "tcoach-2026-10-21-y", "name": "kiekerun", "start_date_local": "2026-10-21T00:00:00"},
+        {"id": 3, "category": "RACE_A", "external_id": "coach-2026-10-30-r", "name": "race", "start_date_local": "2026-10-30T00:00:00"},
+        {"id": 4, "category": "WORKOUT", "external_id": None, "name": "manual", "start_date_local": "2026-10-22T00:00:00"},
+        {"id": 5, "category": "WORKOUT", "external_id": "coach-2026-10-10-old", "name": "old", "start_date_local": "2026-10-10T00:00:00"},
+    ]
+    c, cal = mk(events)
+    assert call(c, "delete_planned_workout", {"event_id": 1})["data"]["deleted"] is True
+    assert call(c, "delete_planned_workout", {"event_id": 2})["data"]["deleted"] is True
+    for eid in (3, 4, 5, 99):
+        assert call(c, "delete_planned_workout", {"event_id": eid})["isError"], eid
+    assert set(cal.events) == {3, 4, 5}
+    for bad in ("1", True, -1, None):
+        assert call(c, "delete_planned_workout", {"event_id": bad})["isError"]
+
+
+def test_write_rate_cap(mk, monkeypatch):
+    monkeypatch.setattr(mcpmod, "WRITE_RATE", mcpmod.RateLimiter(limit=2, window_s=3600))
+    c, cal = mk()
+    ok = [call(c, "save_planned_workout", {"date": "2026-10-2%d" % i, "name": "w"})["isError"] for i in range(3)]
+    assert ok == [False, False, True] and len(cal.events) == 2

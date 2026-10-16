@@ -7,6 +7,7 @@ Environment (set in Coolify, never in the repo or the page):
   MCP_TOKEN                                 secret path of the read-only coach connector (/mcp/<token>)
   TRUSTED_PROXY_HOPS                        reverse proxies in front (default 1: Coolify/Traefik), for the client IP
   RATE_FAILS / RATE_WINDOW_S / RATE_LOCKOUT_S   failed-login lockout (default 10 fails in 900 s -> 900 s lockout)
+  MCP_ALLOW_WRITE                           1 lets the connector plan/delete calendar workouts (default: read-only)
   MCP_RATE_PER_MIN                          valid connector requests per IP per minute (default 60)
 
 The API fails closed: without KIEKERUN_USER/KIEKERUN_PASSWORD every /api route
@@ -257,6 +258,10 @@ def upload(body: UploadIn):
 
 
 # ---------------------------------------------------------------- coach connector (MCP, read-only)
+def mcp_write_enabled() -> bool:
+    return os.environ.get("MCP_ALLOW_WRITE", "").strip().lower() in ("1", "true", "yes")
+
+
 @app.api_route("/mcp/{token}", methods=["GET", "POST", "DELETE"])
 async def mcp_endpoint(token: str, request: Request):
     """Streamable-HTTP MCP endpoint for claude.ai. The URL itself is the secret (MCP_TOKEN);
@@ -279,7 +284,7 @@ async def mcp_endpoint(token: str, request: Request):
     except ValueError:
         return JSONResponse(mcpmod._err(None, -32700, "parse error"), status_code=400)
     if isinstance(body, list):
-        out = [r for r in (mcpmod.handle(m, client, today_local) for m in body) if r is not None]
+        out = [r for r in (mcpmod.handle(m, client, today_local, mcp_write_enabled()) for m in body) if r is not None]
         return JSONResponse(out) if out else Response(status_code=202)
-    out = mcpmod.handle(body, client, today_local)
+    out = mcpmod.handle(body, client, today_local, mcp_write_enabled())
     return JSONResponse(out) if out is not None else Response(status_code=202)

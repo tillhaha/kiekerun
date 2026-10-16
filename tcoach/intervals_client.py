@@ -138,6 +138,21 @@ class IntervalsClient:
     def list_wellness(self, oldest: str, newest: str) -> list[dict]:
         return self._list_with_json_fallback("/wellness", {"oldest": oldest, "newest": newest})
 
+    # --- calendar writes (coach connector) --------------------------------
+    def upsert_event(self, ev: dict) -> dict:
+        """Create or update one calendar event, matched by external_id on its day."""
+        day = ev["start_date_local"][:10]
+        old = next((e for e in self.list_events(day, day, category=None) if e.get("external_id") == ev["external_id"]), None)
+        if old:
+            return self._call("PUT", f"/events/{old['id']}", json=ev) | {"_updated": True}
+        return self._call("POST", "/events", json=ev) | {"_updated": False}
+
+    def get_event(self, event_id: int) -> dict:
+        return self._call("GET", f"/events/{int(event_id)}") or {}
+
+    def delete_event(self, event_id: int) -> None:
+        self._call("DELETE", f"/events/{int(event_id)}")
+
     # --- activities -------------------------------------------------------
     def update_activity(self, activity_id: str, fields: dict) -> dict:
         """Partial update (icu_rpe, feel, description, carbs_ingested, ...). Not athlete-scoped in the API."""

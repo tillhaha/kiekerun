@@ -21,6 +21,7 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 | `TRUSTED_PROXY_HOPS` | optional, default `1`: reverse proxies in front of the app (Coolify's Traefik = 1; Cloudflare in front of it = 2). Decides which `X-Forwarded-For` entry counts as the client address |
 | `RATE_FAILS`, `RATE_WINDOW_S`, `RATE_LOCKOUT_S` | optional, default 10 / 900 / 900: after 10 wrong logins or wrong connector tokens within 15 min an address is locked out for 15 min |
 | `MCP_RATE_PER_MIN` | optional, default `60`: valid connector requests per address per minute |
+| `MCP_ALLOW_WRITE` | optional, `1` lets the connector plan and delete calendar workouts. Default off: read-only, write tools are not even listed |
 
 ## API (HTTP Basic login)
 | Route | Purpose |
@@ -48,7 +49,20 @@ change `MCP_TOKEN` if it leaks. Without `MCP_TOKEN` the route answers 404.
 | `get_wellness(oldest?, newest?)` | CTL, ATL, form (TSB), ramp rate, HRV, resting HR, sleep, readiness, weight |
 | `get_plan_vs_actual(oldest?, newest?)` | per day: planned entries next to done activities; planned workouts marked done / open / no paired activity |
 
-Dates are `YYYY-MM-DD`, default is the last 14 days, maximum range 400 days. All tools only read.
+Dates are `YYYY-MM-DD`, default is the last 14 days, maximum range 400 days. These four tools only read.
+
+### Writing (optional, `MCP_ALLOW_WRITE=1`)
+
+| Tool | Does |
+|---|---|
+| `save_treadmill_workout(date, workout)` | plans a KiekeRun workout (blocks with speed/incline, checked against the treadmill limits); same name on the same day updates it |
+| `save_planned_workout(date, name, type?, description?, duration_min?, load?, carbs_per_h?)` | plans any other workout; `description` is intervals.icu workout text (`- 15m Z2 Pace`); same name on the same day updates it |
+| `delete_planned_workout(event_id)` | deletes a planned workout, only one created here or by KiekeRun (`coach-` / `tcoach-` external id), only today or later |
+
+The write tools only touch planned `WORKOUT` entries. They cannot change activities, wellness data, races or
+notes. Dates must be between yesterday and 400 days ahead, and all writes together are capped at 30 per hour.
+Because the URL is the only secret, anyone who has it can plan workouts once writing is on: keep `MCP_TOKEN` private.
+Your intervals.icu API key needs no extra scope setting; it already allows calendar writes (the same call KiekeRun uses).
 
 ### Rate limiting
 
