@@ -162,3 +162,15 @@ def test_write_rate_cap(mk, monkeypatch):
     c, cal = mk()
     ok = [call(c, "save_planned_workout", {"date": "2026-10-2%d" % i, "name": "w"})["isError"] for i in range(3)]
     assert ok == [False, False, True] and len(cal.events) == 2
+
+
+def test_label_that_already_contains_the_numbers_is_not_doubled(mk):
+    c, cal = mk()
+    w = {"name": "Doppel", "blocks": [
+        {"label": "Steady Vertical 30 min @ 5.5 km/h (10:55 min/km) @ 15% incline", "duration": "30:00", "speed": 5.5, "incline": 15},
+        {"repeat": 2, "label": "Sets", "blocks": [{"label": "Up 5 min @ 5,0 km/h @ 10% incline", "duration": "5:00", "speed": 5, "incline": 10}]}]}
+    r = call(c, "save_treadmill_workout", {"date": "2026-10-17", "workout": w})
+    text = cal.events[r["data"]["event_id"]]["description"]
+    assert "- Steady Vertical 30 min @ 5.5 km/h (10:55 min/km) @ 15% incline\n" in text + "\n"
+    assert "- Up 5 min @ 5.0 km/h (12:00 min/km) @ 10% incline" in text
+    assert text.count("@ 5.5 km/h") == 1 and text.count("km/h") == 2

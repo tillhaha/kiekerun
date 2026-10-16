@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from datetime import timedelta
 from typing import Callable
 
@@ -105,6 +106,22 @@ class ToolError(Exception):
     pass
 
 
+_LABEL_TAIL = re.compile(r"\s+\d+(?::\d{2})?\s*(?:min|s)\s*@\s*\d+(?:[.,]\d+)?\s*km/h\b.*$", re.I)
+
+
+def clean_labels(node):
+    """The server writes '<label> <time> @ <speed> km/h (<pace> min/km) @ <incline>% incline' itself. If the
+    caller already put that into the label, keep only the description so the numbers are not written twice."""
+    if isinstance(node, dict):
+        out = {k: clean_labels(v) if k == "blocks" else v for k, v in node.items()}
+        if isinstance(out.get("label"), str):
+            out["label"] = _LABEL_TAIL.sub("", out["label"]).strip() or out["label"]
+        return out
+    if isinstance(node, list):
+        return [clean_labels(x) for x in node]
+    return node
+
+
 def _text(obj) -> dict:
     return {"content": [{"type": "text", "text": json.dumps(obj, ensure_ascii=False, separators=(",", ":"))}]}
 
@@ -125,7 +142,7 @@ def _write(name: str, args: dict, cl: IntervalsClient, today: str) -> dict:
         raw = args.get("workout")
         if not isinstance(raw, dict):
             raise ValueError("workout must be an object")
-        w = Workout.from_dict(raw)
+        w = Workout.from_dict(clean_labels(raw))
         issues = validate(w)
         if has_errors(issues):
             raise ValueError("; ".join(str(i) for i in issues))
