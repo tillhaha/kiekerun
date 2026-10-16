@@ -52,7 +52,21 @@ Claude = Coach, intervals.icu = Planer + Analyse, KiekeRun = Laufband-Runner, Ga
         |   Aktivität (Sync)        |    Lauf aufgezeichnet     |
         +---------------------------+---------------------------+
 
- 9. Claude liest die Ergebnisse aus intervals.icu und passt den Plan an.
+ 9. Claude liest die Ergebnisse (alle Quellen) aus intervals.icu und passt den Plan an:
+
+ Claude (claude.ai, Coach)
+   |  Connector-URL: https://<domain>/mcp/<MCP_TOKEN>   (nur lesen)
+   v
+ +-----------------------------------------------------------+
+ | Backend (/mcp)                                            |
+ |   get_activities | get_activity | get_wellness |          |
+ |   get_plan_vs_actual                                      |
+ +--+--------------------------------------------------------+
+    | GET /activities, /activity/{id}, /wellness, /events
+    v
+ +---------------+
+ | intervals.icu |   (KiekeRun-Uploads + Garmin Connect, kein Strava-Import mehr)
+ +---------------+
 ```
 
 ## Ablauf einer Laufband-Einheit
@@ -103,6 +117,7 @@ Claude = Coach, intervals.icu = Planer + Analyse, KiekeRun = Laufband-Runner, Ga
 | Notiz | Tito (Sprache) | Feedback-Popup | `description` |
 | Outdoor-Workout (geplant) | Claude | intervals.icu-Kalender, Garmin Connect, Uhr (Push, angenommen) | fenix 9 Pro |
 | Outdoor-Lauf (Ist) | Garmin fenix 9 Pro | Garmin Connect, Sync | Aktivität |
+| Alle Daten zurück zum Coach | intervals.icu | Backend-Connector `/mcp/<MCP_TOKEN>` (nur lesen) | Claude |
 
 ## Hinweise
 

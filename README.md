@@ -17,6 +17,7 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 | `KIEKERUN_USER`, `KIEKERUN_PASSWORD` | login for page and API (the API stays disabled without them) |
 | `TZ_NAME` | optional, default `Europe/Berlin` (what "today" means) |
 | `BODY_WEIGHT_KG` | optional fallback for the calorie estimate; normally the weight comes from the intervals.icu profile |
+| `MCP_TOKEN` | optional, at least 16 random characters. Enables the read-only coach connector at `/mcp/<MCP_TOKEN>` |
 
 ## API (HTTP Basic login)
 | Route | Purpose |
@@ -27,6 +28,24 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 | `POST /api/upload` `{log, paired_event_id?}` | runner log -> FIT (elevation, HR, calorie estimate) -> intervals.icu activity; then RPE, feel, carbs and a description (note + vertical speed per block) are set on it |
 
 Endpoints were checked against https://intervals.icu/api/v1/docs.
+
+## Coach connector (read-only MCP)
+
+Lets Claude (the coach) read everything in intervals.icu: KiekeRun uploads, Garmin runs, wellness, plan.
+Set `MCP_TOKEN` in Coolify (for example the output of `openssl rand -hex 24`), redeploy, then add a custom
+connector in claude.ai (Settings > Connectors) with the URL `https://<your-domain>/mcp/<MCP_TOKEN>`.
+
+The URL is the secret (claude.ai connectors cannot send the Basic login), so treat it like a password and
+change `MCP_TOKEN` if it leaks. Without `MCP_TOKEN` the route answers 404.
+
+| Tool | Returns |
+|---|---|
+| `get_activities(oldest?, newest?, limit?)` | activities of all sources, newest first: distance, duration, pace, HR, elevation, load, RPE, feel, carbs, notes, source device |
+| `get_activity(id)` | one activity with intervals/laps and HR zone times |
+| `get_wellness(oldest?, newest?)` | CTL, ATL, form (TSB), ramp rate, HRV, resting HR, sleep, readiness, weight |
+| `get_plan_vs_actual(oldest?, newest?)` | per day: planned entries next to done activities; planned workouts marked done / open / no paired activity |
+
+Dates are `YYYY-MM-DD`, default is the last 14 days, maximum range 400 days. All tools only read.
 
 ## Workout-Feedback (log extension)
 The page adds `feedback` and `blocks` to the runner log:

@@ -114,6 +114,30 @@ class IntervalsClient:
                 out.append(self._call("POST", "/events", json=ev))
         return out
 
+    # --- reading (coach connector) ----------------------------------------
+    def _list_with_json_fallback(self, path: str, params: dict) -> list[dict]:
+        try:
+            return self._call("GET", path, params=params) or []
+        except IntervalsError as exc:
+            if exc.status != 404:
+                raise
+            return self._call("GET", path + ".json", params=params) or []  # spec path is {path}{ext}
+
+    def list_activities(self, oldest: str, newest: str, limit: int | None = None, fields: str | None = None) -> list[dict]:
+        params = {"oldest": oldest, "newest": newest}
+        if limit:
+            params["limit"] = limit
+        if fields:
+            params["fields"] = fields
+        return self._list_with_json_fallback("/activities", params)
+
+    def get_activity(self, activity_id: str, intervals: bool = True) -> dict:
+        return self._request("GET", f"{self.base_url}/activity/{activity_id}", f"/activity/{activity_id}",
+                             params={"intervals": "true" if intervals else "false"}) or {}
+
+    def list_wellness(self, oldest: str, newest: str) -> list[dict]:
+        return self._list_with_json_fallback("/wellness", {"oldest": oldest, "newest": newest})
+
     # --- activities -------------------------------------------------------
     def update_activity(self, activity_id: str, fields: dict) -> dict:
         """Partial update (icu_rpe, feel, description, carbs_ingested, ...). Not athlete-scoped in the API."""

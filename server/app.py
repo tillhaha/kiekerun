@@ -4,6 +4,7 @@ Environment (set in Coolify, never in the repo or the page):
   INTERVALS_API_KEY, INTERVALS_ATHLETE_ID   intervals.icu access
   KIEKERUN_USER, KIEKERUN_PASSWORD          HTTP Basic login for page + API
   TZ_NAME                                   default Europe/Berlin (what "today" means)
+  MCP_TOKEN                                 secret path of the read-only coach connector (/mcp/<token>)
 
 The API fails closed: without KIEKERUN_USER/KIEKERUN_PASSWORD every /api route
 answers 503, so nobody can write to the calendar through a public URL.
@@ -18,10 +19,11 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
+from server import mcp as mcpmod
 from tcoach.calories import estimate_kcal
 from tcoach.feedback import block_stats, build_description, parse_feedback
 from tcoach.fit_writer import write_fit
@@ -206,3 +208,24 @@ def upload(body: UploadIn):
             update_error = str(exc)
     return {"ok": True, "totals": tot, "calories": kcal, "updated": sorted(fields), "update_error": update_error,
             "intervals": res}
+
+
+# ---------------------------------------------------------------- coach connector (MCP, read-only)
+@app.api_route("/mcp/{token}", methods=["GET", "POST", "DELETE"])
+async def mcp_endpoint(token: str, request: Request):
+    """Streamable-HTTP MCP endpoint for claude.ai. The URL itself is the secret (MCP_TOKEN);
+    wrong token or unset MCP_TOKEN look like a missing route."""
+    expected = os.environ.get("MCP_TOKEN", "")
+    if len(expected) < 16 or not secrets.compare_digest(token.encode(), expected.encode()):
+        raise HTTPException(404, "not found")
+    if request.method != "POST":  # no server-initiated stream, no sessions
+        return Response(status_code=405, headers={"Allow": "POST"})
+    try:
+        body = await request.json()
+    except ValueError:
+        return JSONResponse(mcpmod._err(None, -32700, "parse error"), status_code=400)
+    if isinstance(body, list):
+        out = [r for r in (mcpmod.handle(m, client, today_local) for m in body) if r is not None]
+        return JSONResponse(out) if out else Response(status_code=202)
+    out = mcpmod.handle(body, client, today_local)
+    return JSONResponse(out) if out is not None else Response(status_code=202)
