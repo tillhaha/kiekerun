@@ -5,6 +5,9 @@ Environment (set in Coolify, never in the repo or the page):
   KIEKERUN_USER, KIEKERUN_PASSWORD          HTTP Basic login for page + API
   TZ_NAME                                   default Europe/Berlin (what "today" means)
   MCP_TOKEN                                 secret path of the read-only coach connector (/mcp/<token>)
+  TRUSTED_PROXY_HOPS                        reverse proxies in front (default 1: Coolify/Traefik), for the client IP
+  RATE_FAILS / RATE_WINDOW_S / RATE_LOCKOUT_S   failed-login lockout (default 10 fails in 900 s -> 900 s lockout)
+  MCP_RATE_PER_MIN                          valid connector requests per IP per minute (default 60)
 
 The API fails closed: without KIEKERUN_USER/KIEKERUN_PASSWORD every /api route
 answers 503, so nobody can write to the calendar through a public URL.
@@ -24,6 +27,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
 from server import mcp as mcpmod
+from server.ratelimit import FailLimiter, RateLimiter
 from tcoach.calories import estimate_kcal
 from tcoach.feedback import block_stats, build_description, parse_feedback
 from tcoach.fit_writer import write_fit
@@ -35,6 +39,48 @@ from tcoach.session import samples_from_log
 
 ROOT = Path(__file__).resolve().parent.parent
 basic = HTTPBasic(auto_error=False)
+
+
+def _env_num(name: str, default: float) -> float:
+    try:
+        v = float(os.environ.get(name, ""))
+        return v if v > 0 else default
+    except ValueError:
+        return default
+
+
+FAILS = FailLimiter(int(_env_num("RATE_FAILS", 10)), _env_num("RATE_WINDOW_S", 900), _env_num("RATE_LOCKOUT_S", 900))
+MCP_RATE = RateLimiter(int(_env_num("MCP_RATE_PER_MIN", 60)), 60)
+
+
+def client_ip(request: Request) -> str:
+    """Client address as seen by the first trusted proxy. X-Forwarded-For is appended to by each proxy,
+    so only the entry TRUSTED_PROXY_HOPS from the right can be trusted; anything left of it is client-supplied."""
+    hops = int(_env_num("TRUSTED_PROXY_HOPS", 1))
+    parts = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    if len(parts) >= hops:
+        return parts[-hops]
+    return request.client.host if request.client else "unknown"
+
+
+def _too_many(wait: int) -> HTTPException:
+    return HTTPException(429, "too many attempts, try again later", headers={"Retry-After": str(wait)})
+
+
+def authenticate(request: Request, c: HTTPBasicCredentials | None) -> bool:
+    """True = logged in. Counts wrong credentials per IP and locks the IP out after too many.
+    A request without credentials is the browser's normal first try and is not counted."""
+    ip = client_ip(request)
+    wait = FAILS.retry_after(ip)
+    if wait:
+        raise _too_many(wait)
+    if c is None:
+        return False
+    if _check(c):
+        FAILS.ok(ip)
+        return True
+    FAILS.fail(ip)
+    return False
 app = FastAPI(title="kiekerun", docs_url=None, redoc_url=None, openapi_url=None)
 
 
@@ -49,12 +95,12 @@ def _check(c: HTTPBasicCredentials | None) -> bool:
                 and secrets.compare_digest(c.password.encode(), pw.encode()))
 
 
-def require_login(c: HTTPBasicCredentials | None = Depends(basic)):
+def require_login(request: Request, c: HTTPBasicCredentials | None = Depends(basic)):
     """Protects /api. Fails closed when no login is configured."""
     user, pw = _creds()
     if not (user and pw):
         raise HTTPException(503, "API disabled: set KIEKERUN_USER and KIEKERUN_PASSWORD")
-    if not _check(c):
+    if not authenticate(request, c):
         raise HTTPException(401, "login required", headers={"WWW-Authenticate": 'Basic realm="kiekerun"'})
 
 
@@ -81,7 +127,7 @@ def _intervals_call(fn, *a, **kw):
 @app.get("/")
 def page(request: Request, c: HTTPBasicCredentials | None = Depends(basic)):
     user, pw = _creds()
-    if user and pw and not _check(c):  # protect the page too once a login is configured
+    if user and pw and not authenticate(request, c):  # protect the page too once a login is configured
         raise HTTPException(401, "login required", headers={"WWW-Authenticate": 'Basic realm="kiekerun"'})
     return FileResponse(ROOT / "index.html", media_type="text/html", headers={"Cache-Control": "no-cache"})
 
@@ -215,9 +261,17 @@ def upload(body: UploadIn):
 async def mcp_endpoint(token: str, request: Request):
     """Streamable-HTTP MCP endpoint for claude.ai. The URL itself is the secret (MCP_TOKEN);
     wrong token or unset MCP_TOKEN look like a missing route."""
+    ip = client_ip(request)
+    wait = FAILS.retry_after(ip)
+    if wait:
+        raise _too_many(wait)
     expected = os.environ.get("MCP_TOKEN", "")
     if len(expected) < 16 or not secrets.compare_digest(token.encode(), expected.encode()):
+        FAILS.fail(ip)  # scanners guessing the path lock themselves out
         raise HTTPException(404, "not found")
+    wait = MCP_RATE.hit(ip)
+    if wait:
+        raise _too_many(wait)
     if request.method != "POST":  # no server-initiated stream, no sessions
         return Response(status_code=405, headers={"Allow": "POST"})
     try:
