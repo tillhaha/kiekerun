@@ -65,7 +65,10 @@ WRITE_TOOLS = [
     {"name": "save_treadmill_workout",
      "description": "Plan a treadmill workout for KiekeRun in the intervals.icu calendar. Blocks have speed (km/h) and incline (%) "
                     "and are checked against the treadmill limits. Saving the same name on the same day updates it in place. "
-                    "KiekeRun loads it with the 'Today's workout' button.",
+                    "KiekeRun loads it with the 'Today's workout' button. The block label is only the description "
+                    "(e.g. 'Steady Vertical'): time, km/h, min/km and incline are written into the calendar text automatically as "
+                    "'<label> 30 min @ 5.5 km/h (10:55 min/km) @ 15% incline', so do not put them in the label. "
+                    "Zone info and fueling belong in notes.",
      "inputSchema": {"type": "object", "required": ["date", "workout"], "properties": {
          "date": _DATE,
          "workout": {"type": "object", "required": ["name", "blocks"], "description":

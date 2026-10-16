@@ -72,6 +72,18 @@ request without credentials (the browser's first try) is not counted. State is i
 clears it. If the client address looks wrong (every visitor appears as the same IP), check
 `TRUSTED_PROXY_HOPS`; too low trusts a spoofable header, too high falls back to the proxy's own address.
 
+## Workout text in intervals.icu
+
+KiekeRun writes each block as one line:
+
+    - <description> <time> @ <X.X> km/h (<MM:SS> min/km) @ <X>% incline
+    - Steady Vertical 30 min @ 5.5 km/h (10:55 min/km) @ 15% incline
+
+Repeat groups are a line `Main set 4x` followed by their steps. Speed always uses a decimal point and the
+pace is calculated from it. intervals.icu does not read this line as a structured step (no step graph, no
+automatic load), so duration and distance are set as separate fields on the calendar entry. KiekeRun reads
+this format back, and the older `- Label incline 6pct 8m 5:43/km Pace` format as well.
+
 ## Workout-Feedback (log extension)
 The page adds `feedback` and `blocks` to the runner log:
 `feedback: {rpe 1-10, feel 1-5, note, carbs: [[seconds, grams], ...]}`, `blocks: [{label, t0, dur}]`.

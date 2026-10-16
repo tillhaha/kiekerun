@@ -143,7 +143,7 @@ def health():
 
 @app.get("/api/planned", dependencies=[Depends(require_login)])
 def planned(date: str | None = None):
-    """Planned workouts of a day as kiekerun JSON. Only workouts with 'incline Npct' steps
+    """Planned workouts of a day as kiekerun JSON. Only workouts with '... @ X% incline' steps
     (written by tcoach) can be converted; others are listed with workout=null."""
     day = date or today_local()
     try:

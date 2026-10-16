@@ -97,7 +97,8 @@ def test_save_treadmill_workout_creates_then_updates(mk):
     r = call(c, "save_treadmill_workout", {"date": "2026-10-17", "workout": GOOD_WORKOUT})
     assert not r["isError"] and r["data"]["saved"] and r["data"]["duration_min"] == 24.0
     ev = cal.events[r["data"]["event_id"]]
-    assert ev["external_id"].startswith("tcoach-2026-10-17-") and "incline 15pct" in ev["description"]
+    assert ev["external_id"].startswith("tcoach-2026-10-17-") and "- Up 5 min @ 5.5 km/h (10:55 min/km) @ 15% incline" in ev["description"]
+    assert ev["moving_time"] == 24 * 60 and ev["distance"] > 0
     r2 = call(c, "save_treadmill_workout", {"date": "2026-10-17", "workout": GOOD_WORKOUT})
     assert r2["data"]["event_id"] == r["data"]["event_id"] and len(cal.events) == 1
 

@@ -81,6 +81,7 @@ class IntervalsClient:
             "description": to_intervals_text(workout),
             "external_id": f"tcoach-{date}-{slug(workout.name)}",
             "moving_time": workout.duration_s,
+            "distance": round(workout.distance_km * 1000),  # intervals.icu cannot derive it from our step text
         }
 
     def list_events(self, oldest: str, newest: str, category: str | None = "WORKOUT") -> list[dict]:
