@@ -400,7 +400,6 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="card"><h2 class="lbl">Planned vs actual</h2><div id="dchart"></div></div>
       <div class="card">
         <h2 class="lbl">Export</h2>
-        <div class="muted">Add your feedback, then upload: the session goes to intervals.icu with elevation, heart rate, a calorie estimate and your feedback.</div>
         <pre id="logout" hidden></pre>
         <div class="muted" id="fbsum"></div>
         <div class="muted" id="upmsg"></div>
@@ -554,7 +553,7 @@ function renderFB(){
  const t=fbT(),g=fbCarbs();
  $("fbcarbtxt").textContent=g+" g"+(t>=600&&g?" · "+Math.round(g/(t/3600))+" g/h":"")+(FB.carbs.length?" · last at "+fmt(FB.carbs[FB.carbs.length-1][0]):"");
  $("fbundo").disabled=!FB.carbs.length;
- const s=fbSummary();$("fbsum").textContent=s?"Feedback: "+s:"No feedback yet.";
+ const s=fbSummary();$("fbsum").textContent=s?"Feedback: "+s:"";
  $("fbbtn2").classList.toggle("has",!!s)}
 function fbChanged(){renderFB();refreshLog()}
 for(let i=1;i<=10;i++){const b=document.createElement("button");b.textContent=i;b.dataset.v=i;b.onclick=()=>{FB.rpe=FB.rpe===i?null:i;fbChanged()};$("fbrpe").appendChild(b)}
