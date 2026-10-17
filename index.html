@@ -55,6 +55,8 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .icon{width:44px;height:44px;padding:0;display:grid;place-items:center}
 .icon svg,.pill svg,.drop svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .pill{display:flex;align-items:center;gap:8px;height:44px;padding:0 14px;font-size:15px}
+.tools #themebtn,.tools .pill{width:88px;justify-content:center;padding:0}
+.pill .hrt{font:700 15px var(--fd);letter-spacing:.08em}
 .pill.on{border-color:var(--highlight)}
 .pill.on svg{stroke:var(--highlight)}
 [data-theme="volt"] .pill.on svg{stroke:var(--ink)}
@@ -213,14 +215,12 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .chartpanel{padding:12px}
 [data-theme="night"] .chartpanel{padding:12px 0 0}
 #tl{flex:1;min-height:0}
-.controls{display:grid;grid-template-rows:auto 1fr 1fr;gap:10px;min-height:0}
-.controls button{height:auto;min-height:52px}
-.controls #pause{font-size:24px}
-.ctrl2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.controls{display:grid;grid-template-rows:auto 2.2fr 1fr;gap:10px;min-height:0}
+.controls button{height:auto;min-height:44px}
+.controls #pause{font-size:24px;min-height:72px}
 #stop:not(:disabled){background:var(--alert);color:var(--alert-ink);border-color:transparent}
 .mach{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;justify-content:space-between}
 .mach b{font:600 12px var(--fd);letter-spacing:.12em;text-transform:uppercase}
-#hrcon.on #hrlbl{font-variant-numeric:tabular-nums;min-width:3.2ch}
 .overall{height:5px}
 .overall i{background:var(--primary)}
 
@@ -237,8 +237,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .sum-body{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:12px;min-height:0}
 #dchart{flex:1;min-height:0}
 pre.log{flex:1;min-height:70px;max-height:220px;overflow:auto;background:var(--bg);border:1px solid var(--line);padding:10px;border-radius:var(--r);font-size:11px;white-space:pre-wrap;word-break:break-all;margin:0;color:var(--muted)}
-.export{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:auto}
-.export #up,.export #fbbtn2{grid-column:1/-1}
+.export{display:grid;grid-template-columns:1fr;gap:8px;margin-top:auto}
 #todaybtn{width:100%}
 #todaymsg,#upmsg{overflow-wrap:anywhere}
 #upmsg a{color:inherit;text-decoration:underline;margin-left:4px}
@@ -285,8 +284,8 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div class="tools">
       <span id="clock"></span>
       <button class="icon" id="themebtn" title="Switch light / dark" aria-label="Switch light or dark theme"><svg viewBox="0 0 24 24"><path id="themeic" d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></button>
-      <button class="pill" id="btcon" title="Connect treadmill (Bluetooth)" aria-label="Connect treadmill via Bluetooth"><svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg><span id="btlbl">Treadmill</span></button>
-      <button class="pill" id="hrcon" title="Connect heart-rate strap (Bluetooth)" aria-label="Connect heart-rate strap via Bluetooth"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 00-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 000-7.8z"/></svg><span id="hrlbl">Heart rate</span></button>
+      <button class="pill" id="btcon" title="Connect treadmill (Bluetooth)" aria-label="Connect treadmill via Bluetooth"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="4.5" r="1.6"/><path d="M13.5 8l-2.2 4.2 3.2 2.3V19M11.3 12.2L8 13.5M14 9l3 1.8M4 21.5h16"/></svg></button>
+      <button class="pill" id="hrcon" title="Connect heart-rate strap (Bluetooth)" aria-label="Connect heart-rate strap via Bluetooth"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg><span class="hrt">HR</span></button>
       <button class="icon" id="alertbtn" title="Alert settings" aria-label="Alert settings"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 003.4 0"/></svg></button>
     </div>
   </header>
@@ -386,7 +385,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="controls">
         <div class="mach"><b>Treadmill</b><span id="mach">not connected</span></div>
         <button class="pri" id="pause">Pause</button>
-        <div class="ctrl2"><button id="skip">Skip</button><button class="ghost" id="stop" disabled title="Pause first, then finish">Finish</button></div>
+        <button class="ghost" id="stop" disabled title="Pause first, then finish">Finish</button>
       </div>
     </div>
     <div class="bar overall"><i id="prog"></i></div>
@@ -401,12 +400,11 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="card"><h2 class="lbl">Planned vs actual</h2><div id="dchart"></div></div>
       <div class="card">
         <h2 class="lbl">Export</h2>
-        <div class="muted">Add your feedback, then upload: the session goes to intervals.icu with elevation, heart rate, a calorie estimate and your feedback. Download keeps the raw log.</div>
-        <pre class="log" id="logout"></pre>
+        <div class="muted">Add your feedback, then upload: the session goes to intervals.icu with elevation, heart rate, a calorie estimate and your feedback.</div>
+        <pre id="logout" hidden></pre>
         <div class="muted" id="fbsum"></div>
         <div class="muted" id="upmsg"></div>
-        <div class="muted" id="copied"></div>
-        <div class="export"><button id="fbbtn2">Workout-Feedback</button><button class="pri" id="up">Upload to intervals.icu</button><button id="dl">Download</button><button id="copy">Copy</button><button class="ghost" id="again">New</button></div>
+        <div class="export"><button id="fbbtn2">Workout-Feedback</button><button class="pri" id="up">Upload to intervals.icu</button><button class="ghost" id="again">New</button></div>
       </div>
     </div>
   </section>
@@ -475,14 +473,14 @@ const BLE={dev:null,cp:null,live:{},q:Promise.resolve(),wait:null,cur:{s:0,i:0},
   try{
    if(!navigator.bluetooth)throw Error("Web Bluetooth not available in this browser or frame");
    this.dev=await navigator.bluetooth.requestDevice({filters:[{services:[U(0x1826)]}]});
-   this.dev.addEventListener("gattserverdisconnected",()=>{this.cp=null;this.st("Treadmill disconnected. The belt keeps its last command: use the safety key or console to stop.",true);$("btcon").classList.remove("on");$("btlbl").textContent="Treadmill"});
+   this.dev.addEventListener("gattserverdisconnected",()=>{this.cp=null;this.st("Treadmill disconnected. The belt keeps its last command: use the safety key or console to stop.",true);$("btcon").classList.remove("on")});
    const srv=await this.dev.gatt.connect(),svc=await srv.getPrimaryService(U(0x1826));
    this.cp=await svc.getCharacteristic(U(0x2ad9));
    this.cp.addEventListener("characteristicvaluechanged",e=>this.resp(e.target.value));
    await this.cp.startNotifications();
    const d=await svc.getCharacteristic(U(0x2acd));d.addEventListener("characteristicvaluechanged",e=>this.data(e.target.value));await d.startNotifications();
    try{const t=await svc.getCharacteristic(U(0x2ada));t.addEventListener("characteristicvaluechanged",e=>this.status(e.target.value));await t.startNotifications()}catch(e){}
-   $("btcon").classList.add("on");$("btlbl").textContent=this.dev.name||"Connected";this.st("Connected to "+(this.dev.name||"treadmill")+". Control is requested when you press Start.");
+   $("btcon").classList.add("on");this.st("Connected to "+(this.dev.name||"treadmill")+". Control is requested when you press Start.");
   }catch(e){this.cp=null;e.name==="NotFoundError"?this.st(""):this.st("Bluetooth: "+e.message,true)}},
  resp(v){if(v.getUint8(0)!==0x80)return;const op=v.getUint8(1),res=v.getUint8(2);if(this.wait&&this.wait.op===op){this.wait.ok(res)}},
  cmd(bytes){this.q=this.q.then(()=>new Promise(async ok=>{
@@ -528,13 +526,13 @@ const HR={dev:null,bpm:null,t:0,tries:0,want:false,
  async hook(){
   const srv=await this.dev.gatt.connect(),svc=await srv.getPrimaryService(U(0x180d)),c=await svc.getCharacteristic(U(0x2a37));
   c.addEventListener("characteristicvaluechanged",e=>this.data(e.target.value));await c.startNotifications();
-  this.tries=0;$("hrcon").classList.add("on");$("hrlbl").textContent="– bpm";BLE.st("Heart-rate strap connected: "+(this.dev.name||"strap")+". If no value appears, make sure the strap is not paired to another device.")},
- lost(){this.bpm=null;$("hrcon").classList.remove("on");$("hrlbl").textContent="Heart rate";
+  this.tries=0;$("hrcon").classList.add("on");BLE.st("Heart-rate strap connected: "+(this.dev.name||"strap")+". If no value appears, make sure the strap is not paired to another device.")},
+ lost(){this.bpm=null;$("hrcon").classList.remove("on");
   if(this.want&&this.tries<5){this.tries++;BLE.st("Strap lost, reconnecting ("+this.tries+"/5)…",true);setTimeout(()=>{if(this.want)this.hook().catch(()=>this.lost())},2000*this.tries)}
   else{const u=this.user;this.want=false;this.user=false;BLE.st(u?"":"Heart-rate strap disconnected.",!u)}},
  disconnect(){this.want=false;this.user=true;try{this.dev&&this.dev.gatt.disconnect()}catch(e){}},
  data(v){const f=v.getUint8(0),b=f&1?v.getUint16(1,true):v.getUint8(1);
-  if(b>0&&b<250){this.bpm=b;this.t=Date.now();$("hrlbl").textContent=b+" bpm"}else{this.bpm=null}}};
+  if(b>0&&b<250){this.bpm=b;this.t=Date.now()}else{this.bpm=null}}};
 const hrNow=()=>{if(HR.bpm!=null&&Date.now()-HR.t<5000)return HR.bpm;const t=BLE.live&&BLE.live.hr;return t>0?t:null};
 $("hrcon").onclick=()=>{if(HR.dev&&HR.dev.gatt.connected)HR.disconnect();else HR.connect()};
 const am=$("alertmodal");$("alertbtn").onclick=()=>{am.hidden=false};$("alertclose").onclick=()=>{am.hidden=true};
@@ -675,7 +673,6 @@ document.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=()=>{if(!S||S.pau
  if(a[0]==="s")S.speed=Math.max(1,Math.round((S.speed+d)*10)/10);else S.incline=Math.round((S.incline+d)*10)/10;logEv();BLE.send(S.speed,S.incline);loop()});
 $("pause").onclick=()=>{if(!S)return;if(S.paused){S.pausedMs+=Date.now()-S.pauseAt;S.paused=false;BLE.send(S.speed,S.incline);$("stop").disabled=true;$("stop").className="ghost";$("pause").textContent="Pause";$("banner").className="banner";$("banner").textContent="resumed"}
  else{S.paused=true;S.pauseAt=Date.now();$("stop").disabled=false;$("stop").className="";$("pause").textContent="Resume";$("banner").className="banner soon";$("banner").textContent="PAUSED — timer stopped, belt keeps running"}};
-$("skip").onclick=()=>{if(!S||S.paused||S.hold)return;const e=elapsed(),i=curIdx(e);if(B[i+1]){S.skip+=B[i+1].t0-e+.01;S.alerted=-1}};
 $("stop").onclick=()=>S&&finish(true);
 function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);clearInterval(hrt);BLE.clr("hrgap");BLE.stop();try{wl&&wl.release()}catch(x){}
  if(!early)beep(4,1319);vib([500,150,500]);
@@ -685,7 +682,6 @@ function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);cle
  $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").textContent="";$("upmsg").style.color="";
  renderSummary(log,e,km);
  LAST_LOG=log;S=null;refreshLog();renderFB()}
-$("copy").onclick=async()=>{const t=$("logout").textContent;try{await navigator.clipboard.writeText(t);$("copied").textContent="Copied."}catch(e){const r=document.createRange();r.selectNodeContents($("logout"));const s=getSelection();s.removeAllRanges();s.addRange(r);$("copied").textContent="Select-all done — copy manually."}};
 $("again").onclick=()=>show("setup");
 $("up").onclick=async()=>{const t=$("logout").textContent;if(!t)return;const b=$("up"),m=$("upmsg");b.disabled=true;m.style.color="";m.textContent="Uploading…";
  try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED})});
@@ -693,8 +689,6 @@ $("up").onclick=async()=>{const t=$("logout").textContent;if(!t)return;const b=$
   if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded";if(d.calories)m.append(" · ~"+d.calories+" kcal (estimate)");if(d.update_error)m.append(" · Feedback fields not saved: "+d.update_error)}
   else{m.textContent="intervals.icu created no new activity (this session was probably uploaded already).";b.textContent="Already uploaded"}
  }catch(e){m.textContent="Upload failed: "+e.message;m.style.color="var(--alert-tint-ink)";b.disabled=false}};
-$("dl").onclick=()=>{const t=$("logout").textContent;if(!t)return;const a=document.createElement("a"),nm=(JSON.parse(t).started_at||"log").slice(0,16).replace(/[:T]/g,"-");
- a.href=URL.createObjectURL(new Blob([t],{type:"application/json"}));a.download="treadmill-"+nm+".json";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);$("copied").textContent="Downloaded "+a.download}
 const MOON="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z",SUN="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6L4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M16 12a4 4 0 11-8 0 4 4 0 018 0z";
 function setTheme(t){document.documentElement.dataset.theme=t;$("themeic").setAttribute("d",t==="night"?SUN:MOON);try{localStorage.setItem("tc_theme",t)}catch(e){}}
 $("themebtn").onclick=()=>setTheme(document.documentElement.dataset.theme==="night"?"volt":"night");
