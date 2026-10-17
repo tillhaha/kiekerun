@@ -447,7 +447,7 @@ function flat(w){const out=[];const add=(b,rl)=>out.push({label:b.label||"Block"
 function fuelOf(w,tot){const out=[],add=(t,f)=>{if(t>=0&&t<=tot)out.push({at:t,c:+f.carbs_g||0,f:+f.fluid_ml||0,n:String(f.note||"")})};
  for(const f of (Array.isArray(w.fuel)?w.fuel:[])){if(f.every){const st=pdur(f.every),end=f.until?pdur(f.until):tot;for(let t=f.from?pdur(f.from):st;t<=Math.min(end,tot);t+=st)add(t,f)}else if(f.at!=null)add(pdur(f.at),f)}
  return out.sort((a,b)=>a.at-b.at)}
-const fuelTxt=f=>[f.c?f.c+" g":"",f.f?f.f+" ml":"",f.n].filter(Boolean).join(" · ");
+const fuelTxt=f=>[f.n,f.c?f.c+" g":"",f.f?f.f+" ml":""].filter(Boolean).join(" · ");
 const rise=(km,inc)=>km*1000*Math.sin(Math.atan(inc/100));
 function validate(bl){const is=[];bl.forEach((b,i)=>{
  if(b.speed<1||b.speed>22)is.push(["error",`Block ${i+1} ${b.label}: ${b.speed} km/h outside 1–22`]);
@@ -697,7 +697,7 @@ function fuelTick(e){const F=S&&S.fz;if(!F||!F.length)return;
  if(d>0){card.className="nextcard fuelcard"+(d<=30?" live":"");$("fxv").textContent="in "+fmt(d)+" · at "+fmt(f.at);
   if(d<=30&&S.fp!==k){S.fp=k;beep(1,1400,.1);vib(100)}}
  else{card.className="nextcard fuelcard due";$("fxt").textContent="Fuel now · tap when taken"+(miss?" · "+miss+" missed":"");$("fxv").textContent="due "+fmt(-d)+" ago";
-  if(S.fa!==k){S.fa=k;S.fl=e;beep(3,1568,.12);vib([200,100,200,100,200]);say("Fuel now. "+(f.c?f.c+" grams carbs":"")+(f.n?" "+f.n:""))}
+  if(S.fa!==k){S.fa=k;S.fl=e;beep(3,1568,.12);vib([200,100,200,100,200]);say("Fuel now. "+(f.n?f.n+". ":"")+(f.c?f.c+" grams carbs":""))}
   else if(e-S.fl>=60){S.fl=e;beep(2,1568,.12);vib([200,100,200])}}}
 $("fuelcard").onclick=()=>{if(!S||S.paused||S.hold||!S.fz)return;const e=elapsed(),k=S.fz.findIndex(f=>f.st===0);if(k<0)return;const f=S.fz[k];if(f.at-e>30)return;
  f.st=1;if(f.c){FB.carbs.push([Math.round(e),f.c]);fbChanged()}fuelTick(e)};
