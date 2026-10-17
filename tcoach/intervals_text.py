@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 
-from .models import Block, Repeat, Workout, parse_duration
+from .models import Block, Fuel, Repeat, Workout, fmt_clock, parse_duration
 
 MODE_LINE = re.compile(r"^treadmill mode:\s*(run|climb)\b", re.I)
 STEP_RE = re.compile(  # legacy format
@@ -32,6 +32,10 @@ STEP_NEW_RE = re.compile(
     rf"(?:\s+mode\s+(?P<mode>run|climb))?\s*$",
     re.I,
 )
+FUEL_HEAD = re.compile(r"^fuel plan:?$", re.I)
+FUEL_RE = re.compile(
+    r"^@?\s*(?P<at>\d+(?::\d{2}){1,2})\s*[·|,]?\s*(?:(?P<c>\d+)\s*g(?:\s*carbs?)?)?\s*[·|,]?\s*"
+    r"(?:(?P<f>\d+)\s*ml)?\s*[·|,]?\s*(?P<note>.*)$", re.I)
 REPEAT_RE = re.compile(r"^(?P<label>.*?)\s*(?P<n>\d+)x\s*$", re.I)
 
 
@@ -93,6 +97,17 @@ def to_intervals_text(workout: Workout) -> str:
         else:
             lines.append(_step_line(step))
         lines.append("")
+    if workout.fuel:
+        lines.append("Fuel plan")
+        for f in workout.fuel:
+            parts = [f"@ {fmt_clock(f.at_s)}"]
+            if f.carbs_g:
+                parts.append(f"{f.carbs_g} g carbs")
+            if f.fluid_ml:
+                parts.append(f"{f.fluid_ml} ml")
+            if f.note:
+                parts.append(f.note)
+            lines.append(" · ".join(parts))
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -101,10 +116,24 @@ def parse_intervals_text(text: str, name: str = "Treadmill workout", mode: str =
     warnings: list[str] = []
     steps = []
     current_repeat: Repeat | None = None
+    fuel: list[Fuel] = []
+    in_fuel = False
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
             current_repeat = None
+            in_fuel = False
+            continue
+        if FUEL_HEAD.match(line):
+            in_fuel = True
+            continue
+        if in_fuel:
+            fm = FUEL_RE.match(line)
+            if fm and (fm.group("c") or fm.group("f") or fm.group("note")):
+                fuel.append(Fuel(parse_duration(fm.group("at")), int(fm.group("c") or 0), int(fm.group("f") or 0),
+                                 fm.group("note").strip()))
+            else:
+                warnings.append(f"unparsed fuel line: {line}")
             continue
         mm = MODE_LINE.match(line)
         if mm:
@@ -146,4 +175,4 @@ def parse_intervals_text(text: str, name: str = "Treadmill workout", mode: str =
     steps = [s for s in steps if not isinstance(s, Repeat) or s.blocks]
     if not steps:
         raise ValueError("no parsable steps found")
-    return Workout(name=name, steps=steps, mode=mode), warnings
+    return Workout(name=name, steps=steps, mode=mode, fuel=sorted(fuel, key=lambda f: f.at_s)), warnings

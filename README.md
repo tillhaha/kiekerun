@@ -90,3 +90,19 @@ The page adds `feedback` and `blocks` to the runner log:
 intervals.icu fields: `icu_rpe`, `feel` (1 Strong ... 5 Weak, verify once in the UI), `carbs_ingested`, `description`, `calories`.
 Calories are estimated with the ACSM walking/running equations from speed, incline and body weight
 (`tcoach/calories.py`); vertical speed per block is computed from speed and incline, not measured by the treadmill.
+
+## Nutrition plan
+
+A workout may carry a `fuel` list (times are workout time, pauses do not count):
+
+```json
+"fuel": [
+  {"at": "20:00", "carbs_g": 30, "fluid_ml": 150, "note": "Gel"},
+  {"every": "20:00", "from": "10:00", "until": "2:00:00", "carbs_g": 30, "note": "Gel"}
+]
+```
+
+`save_treadmill_workout` accepts it and writes a `Fuel plan` section (`@ 20:00 · 30 g carbs · 150 ml · Gel`) into the
+event description; "Today's workout" reads it back. KiekeRun shows the plan on the Plan screen and a "Next fuel" box in the
+Run top row (countdown, beep/vibration/voice when due, repeated every minute). Tap the box (from 30 s before) to mark it
+taken; entries with carbs are logged into the feedback carb log. A fuel point is marked missed when the next one is due.

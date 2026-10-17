@@ -69,13 +69,16 @@ WRITE_TOOLS = [
                     "KiekeRun loads it with the 'Today's workout' button. The block label is only the description "
                     "(e.g. 'Steady Vertical'): time, km/h, min/km and incline are written into the calendar text automatically as "
                     "'<label> 30 min @ 5.5 km/h (10:55 min/km) @ 15% incline', so do not put them in the label. "
-                    "Zone info and fueling belong in notes.",
+                    "Zone info belongs in notes. A fueling plan goes into 'fuel' (shown in KiekeRun as an overview and as reminders "
+                    "during the run, times are workout time): [{at:'20:00', carbs_g:30, fluid_ml:150, note:'Gel'}] or repeating "
+                    "[{every:'20:00', from?:'10:00', until?:'2:00:00', carbs_g:30, note:'Gel'}].",
      "inputSchema": {"type": "object", "required": ["date", "workout"], "properties": {
          "date": _DATE,
          "workout": {"type": "object", "required": ["name", "blocks"], "description":
                      "{name, notes?, blocks:[{label, duration:'mm:ss' or 'h:mm:ss', speed:km/h, incline:%} or "
-                     "{repeat:N, label?, blocks:[...]}]}", "properties": {
-                         "name": {"type": "string"}, "notes": {"type": "string"}, "blocks": {"type": "array"}}}}},
+                     "{repeat:N, label?, blocks:[...]}], fuel?:[{at|every, carbs_g?, fluid_ml?, note?}]}", "properties": {
+                         "name": {"type": "string"}, "notes": {"type": "string"}, "blocks": {"type": "array"},
+                         "fuel": {"type": "array", "maxItems": 60}}}}},
      "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}},
     {"name": "save_planned_workout",
      "description": "Plan any other workout (outdoor run, strength, mobility, rest-day note as a workout) in the intervals.icu calendar. "

@@ -7,6 +7,10 @@ JSON schema (all keys short on purpose, so a coach/LLM can emit it easily):
   "mode": "run",                      # "run" | "climb" (T-800 modes), default for all blocks
   "date": "2026-10-20",               # optional
   "notes": "free text",
+  "fuel": [                           # optional nutrition plan, times in workout time (pauses don't count)
+    {"at": "20:00", "carbs_g": 30, "fluid_ml": 150, "note": "Gel"},
+    {"every": "20:00", "carbs_g": 30, "note": "Gel"}      # repeating: from 'from' (default = every) until 'until' (default end)
+  ],
   "blocks": [
     {"label": "Warm-up", "duration": "10:00", "speed": 8.0, "incline": 2},
     {"repeat": 4, "label": "Main set", "blocks": [
@@ -142,12 +146,79 @@ def climb_rise_m(distance_m: float, incline_pct: float) -> float:
 
 
 @dataclass
+class Fuel:
+    at_s: int
+    carbs_g: int = 0
+    fluid_ml: int = 0
+    note: str = ""
+
+    def to_dict(self) -> dict:
+        d = {"at": fmt_clock(self.at_s)}
+        if self.carbs_g:
+            d["carbs_g"] = self.carbs_g
+        if self.fluid_ml:
+            d["fluid_ml"] = self.fluid_ml
+        if self.note:
+            d["note"] = self.note
+        return d
+
+
+def fmt_clock(secs: int) -> str:
+    h, rem = divmod(int(secs), 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _amount(d: dict, key: str, hi: int) -> int:
+    v = d.get(key, 0) or 0
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= hi:
+        raise ValueError(f"fuel {key} must be a number from 0 to {hi}")
+    return int(round(v))
+
+
+def parse_fuel(items, total_s: int) -> list[Fuel]:
+    """Expand the 'fuel' list ({at,...} or {every, from?, until?,...}) into sorted single entries."""
+    if items in (None, []):
+        return []
+    if not isinstance(items, list):
+        raise ValueError("fuel must be a list")
+    out: list[Fuel] = []
+    for it in items:
+        if not isinstance(it, dict):
+            raise ValueError("fuel entries must be objects")
+        carbs, fluid = _amount(it, "carbs_g", 300), _amount(it, "fluid_ml", 2000)
+        note = str(it.get("note", "")).strip()[:80]
+        if not (carbs or fluid or note):
+            raise ValueError("fuel entry needs carbs_g, fluid_ml or note")
+        if "every" in it:
+            step = parse_duration(it["every"])
+            if step < 60:
+                raise ValueError("fuel 'every' must be at least 1 minute")
+            t = parse_duration(it["from"]) if "from" in it else step
+            end = parse_duration(it["until"]) if "until" in it else total_s
+            while t <= min(end, total_s):
+                out.append(Fuel(t, carbs, fluid, note))
+                t += step
+        else:
+            t = parse_duration(it["at"]) if "at" in it else None
+            if t is None:
+                raise ValueError("fuel entry needs 'at' or 'every'")
+            if t > total_s:
+                raise ValueError(f"fuel at {fmt_clock(t)} is after the end of the workout ({fmt_clock(total_s)})")
+            out.append(Fuel(t, carbs, fluid, note))
+    if len(out) > 60:
+        raise ValueError("at most 60 fuel entries")
+    return sorted(out, key=lambda f: f.at_s)
+
+
+@dataclass
 class Workout:
     name: str
     steps: list[Step]
     mode: str = "run"
     notes: str = ""
     date: str | None = None
+    fuel: list[Fuel] = field(default_factory=list)
 
     def __post_init__(self):
         if self.mode not in MODES:
@@ -161,13 +232,15 @@ class Workout:
             steps.append(Repeat.from_dict(item) if "repeat" in item else Block.from_dict(item))
         if not steps:
             raise ValueError("workout has no blocks")
-        return cls(
+        w = cls(
             name=str(d.get("name", "Treadmill workout")),
             steps=steps,
             mode=d.get("mode", "run"),
             notes=str(d.get("notes", "")),
             date=d.get("date"),
         )
+        w.fuel = parse_fuel(d.get("fuel"), w.duration_s)
+        return w
 
     @classmethod
     def load(cls, path) -> "Workout":
@@ -179,6 +252,8 @@ class Workout:
             d["notes"] = self.notes
         if self.date:
             d["date"] = self.date
+        if self.fuel:
+            d["fuel"] = [f.to_dict() for f in self.fuel]
         return d
 
     def save(self, path) -> None:

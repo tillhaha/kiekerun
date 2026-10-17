@@ -117,6 +117,7 @@ Outdoor-Einheiten laufen ohne KiekeRun: Kalender, Garmin Connect, Uhr, und die A
 |---|---|---|---|
 | Geplantes Workout | Claude | Kalender-Event, Schritte als `Beschreibung 30 min @ 5.5 km/h (10:55 min/km) @ 15% incline`; Dauer und Distanz als eigene Felder | intervals.icu-Kalender (WORKOUT, `external_id` `tcoach-...`) |
 | Geplantes Outdoor-Workout | Claude | intervals.icu-Kalender, Garmin-Sync | fenix 9 Pro (Push, Weg angenommen) |
+| Nutrition-Plan (Zeit, Karbs, Flüssigkeit, Notiz) | Claude | Abschnitt `Fuel plan` in der Event-Beschreibung (`@ 20:00 · 30 g carbs · 150 ml · Gel`), Zeiten in Workout-Zeit | KiekeRun: Übersicht vor dem Start, Fuel-Box mit Erinnerung im Run; "Taken" schreibt ins Karbs-Log |
 | Soll Speed/Incline | Workout-Blöcke | KiekeRun per Bluetooth FTMS | Laufband, nur im Log |
 | Ist Speed, Incline, Distanz | Laufband | Bluetooth FTMS, 1 Hz | FIT |
 | Höhenmeter | berechnet (Speed, Incline) | Backend | FIT (Höhe, Steigung) |

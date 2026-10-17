@@ -172,6 +172,17 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 @media (prefers-reduced-motion:reduce){.banner.now{animation:none}}
 .nextcard{background:var(--surface);border-radius:var(--r);padding:10px 18px;display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
 [data-theme="night"] .nextcard{background:transparent;border:1px solid var(--line)}
+.toprow.hasfuel{grid-template-columns:minmax(0,1fr) 250px 270px}
+.fuelcard{cursor:default;user-select:none}
+.fuelcard.live{cursor:pointer;box-shadow:inset 5px 0 0 var(--highlight)}
+.fuelcard.due{background:var(--alert);color:var(--alert-ink);border-color:transparent;cursor:pointer;animation:fpulse 1s steps(2,end) infinite}
+.fuelcard.due .lbl,.fuelcard.due .nv{color:var(--alert-ink)}
+@keyframes fpulse{50%{filter:brightness(1.18)}}
+.fuelpv{display:flex;flex-direction:column;gap:6px}
+.fuelpv .fsum{font:600 14px var(--ft);color:var(--muted)}
+.fuelpv .chips{display:flex;flex-wrap:wrap;gap:6px}
+.fuelpv .chip{border:1px solid var(--line);border-radius:var(--r);padding:4px 10px;font:600 14px var(--fd);letter-spacing:.04em;white-space:nowrap}
+.fuelpv .chip i{font-style:normal;color:var(--muted);font-weight:500;margin-left:6px}
 .nextcard b{font:700 24px/1.1 var(--fd);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nextcard .nv{font:600 17px var(--fd);letter-spacing:.04em;color:var(--muted);font-variant-numeric:tabular-nums}
 .main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px;min-height:0}
@@ -343,6 +354,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <div id="sum"></div>
         <div id="issues" class="issues"></div>
         <div id="pvtl"></div>
+        <div id="pvfuel" class="fuelpv" hidden></div>
         <div id="pvtab"></div>
       </div>
     </div>
@@ -357,6 +369,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div class="toprow">
       <div class="banner" id="banner">—</div>
       <div class="nextcard"><span class="lbl">Next up</span><b id="nxl">—</b><span class="nv" id="nxv"></span></div>
+      <div class="nextcard fuelcard" id="fuelcard" role="button" hidden><span class="lbl" id="fxt">Next fuel</span><b id="fxl">—</b><span class="nv" id="fxv"></span></div>
     </div>
     <div class="main">
       <div class="tile">
@@ -412,7 +425,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
 <script>
 
 const EX={
- ex1:{name:"Threshold 4x8",notes:"Lactate threshold on 6% incline",blocks:[
+ ex1:{name:"Threshold 4x8",notes:"Lactate threshold on 6% incline",fuel:[{every:"20m",carbs_g:30,fluid_ml:150,note:"Gel"}],blocks:[
   {label:"Warm-up",duration:"10m",speed:8,incline:2},
   {repeat:4,label:"Threshold",blocks:[{label:"Work",duration:"8m",speed:10.5,incline:6},{label:"Float",duration:"3m",speed:6,incline:2}]},
   {label:"Cool-down",duration:"8m",speed:7,incline:1}]},
@@ -431,6 +444,10 @@ function pdur(v){if(typeof v==="number")return v;v=String(v).trim();let m;
 function flat(w){const out=[];const add=(b,rl)=>out.push({label:b.label||"Block",dur:pdur(b.duration),speed:+b.speed,incline:+b.incline});
  for(const s of w.blocks){if(s.repeat){for(let i=1;i<=s.repeat;i++)for(const b of s.blocks)add({...b,label:(s.label?s.label+" "+i+"/"+s.repeat+" · ":"")+(b.label||"")})}else add(s)}
  let t=0;out.forEach(b=>{b.t0=t;t+=b.dur});return out}
+function fuelOf(w,tot){const out=[],add=(t,f)=>{if(t>=0&&t<=tot)out.push({at:t,c:+f.carbs_g||0,f:+f.fluid_ml||0,n:String(f.note||"")})};
+ for(const f of (Array.isArray(w.fuel)?w.fuel:[])){if(f.every){const st=pdur(f.every),end=f.until?pdur(f.until):tot;for(let t=f.from?pdur(f.from):st;t<=Math.min(end,tot);t+=st)add(t,f)}else if(f.at!=null)add(pdur(f.at),f)}
+ return out.sort((a,b)=>a.at-b.at)}
+const fuelTxt=f=>[f.c?f.c+" g":"",f.f?f.f+" ml":"",f.n].filter(Boolean).join(" · ");
 const rise=(km,inc)=>km*1000*Math.sin(Math.atan(inc/100));
 function validate(bl){const is=[];bl.forEach((b,i)=>{
  if(b.speed<1||b.speed>22)is.push(["error",`Block ${i+1} ${b.label}: ${b.speed} km/h outside 1–22`]);
@@ -438,14 +455,15 @@ function validate(bl){const is=[];bl.forEach((b,i)=>{
  if(b.incline>20&&b.speed>9)is.push(["error",`Block ${i+1} ${b.label}: above 20% incline speed is limited to 9 km/h`]);
  if(i&&Math.abs(b.speed-bl[i-1].speed)>6)is.push(["warn",`Block ${i+1}: big speed jump`]);
  if(i&&Math.abs(b.incline-bl[i-1].incline)>15)is.push(["warn",`Block ${i+1}: big incline jump`])});return is}
-let W=null,B=[],PLANNED=null;
-function parse(){const box=$("issues"),sum=$("sum");box.innerHTML="";sum.innerHTML="";$("pvtl").innerHTML="";$("pvtab").innerHTML="";$("ctaname").textContent="No workout loaded";$("ctanote").textContent="Pick an example or drop your own workout.";$("start").disabled=true;$("readytxt").textContent="Load a workout to start";W=null;
+let W=null,B=[],FUEL=[],PLANNED=null;
+function parse(){const box=$("issues"),sum=$("sum");box.innerHTML="";sum.innerHTML="";$("pvtl").innerHTML="";$("pvtab").innerHTML="";$("pvfuel").hidden=true;FUEL=[];$("ctaname").textContent="No workout loaded";$("ctanote").textContent="Pick an example or drop your own workout.";$("start").disabled=true;$("readytxt").textContent="Load a workout to start";W=null;
  const txt=$("json").value.trim();if(!txt)return;
  try{W=JSON.parse(txt);B=flat(W);if(!B.length)throw Error("no blocks")}catch(e){box.innerHTML=`<div class="issue error">${e.message}</div>`;$("pastebox").open=true;$("readytxt").textContent="The JSON has an error";W=null;return}
- const dur=B.reduce((a,b)=>a+b.dur,0),km=B.reduce((a,b)=>a+b.speed*b.dur/3600,0),up=B.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0);
+ const dur=B.reduce((a,b)=>a+b.dur,0);try{FUEL=fuelOf(W,dur)}catch(e){box.innerHTML=`<div class="issue error">fuel: ${e.message}</div>`;FUEL=[]}
+ const km=B.reduce((a,b)=>a+b.speed*b.dur/3600,0),up=B.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0);
  sum.innerHTML=`<div class="kpis">`+kpi("Duration",fmt(dur))+kpi("Distance",km.toFixed(1)+" km","sp")+kpi("Elevation gain","+"+Math.round(up)+" m","in")+kpi("Blocks",B.length)+`</div>`;$("ctaname").textContent=W.name||"Workout";$("ctanote").textContent=W.notes||fmt(dur)+" · "+km.toFixed(1)+" km · +"+Math.round(up)+" m";
  const is=validate(B);is.forEach(([k,m])=>{const d=document.createElement("div");d.className="issue "+k;d.textContent=m;box.appendChild(d)});
- renderPreview(B);$("start").disabled=is.some(i=>i[0]==="error");
+ renderPreview(B);renderFuelPv(dur);$("start").disabled=is.some(i=>i[0]==="error");
  $("readytxt").textContent=$("start").disabled?"Fix the errors above to start":is.length?"Ready, with "+is.length+" warning"+(is.length>1?"s":""):"All blocks within treadmill limits"}
 $("json").oninput=()=>{PLANNED=null;parse()};
 ["ex1","ex2","ex3"].forEach(k=>$(k).onclick=()=>{PLANNED=null;$("json").value=JSON.stringify(EX[k],null,1);parse();document.querySelectorAll(".recent button").forEach(b=>b.classList.toggle("sel",b.id===k))});
@@ -612,6 +630,10 @@ function renderPreview(B){const tot=B.reduce((a,b)=>a+b.dur,0);
  $("pvtl").innerHTML=chart(B,tot,{h:130});
  $("pvtab").innerHTML='<div class="tbl"><table><thead><tr><th>#</th><th>Block</th><th>Start</th><th>Time</th><th>km/h</th><th>Incline</th></tr></thead><tbody>'+
   B.map((b,i)=>`<tr><td>${i+1}</td><td>${b.label}</td><td>${fmt(b.t0)}</td><td>${fmt(b.dur)}</td><td>${(+b.speed).toFixed(1)}</td><td>${b.incline}%</td></tr>`).join("")+'</tbody></table></div>'}
+function renderFuelPv(tot){const el=$("pvfuel");if(!FUEL.length){el.hidden=true;return}
+ const c=FUEL.reduce((a,f)=>a+f.c,0),fl=FUEL.reduce((a,f)=>a+f.f,0),h=tot/3600;
+ el.innerHTML=`<h2 class="lbl">Fuel plan</h2><div class="fsum">${[c?c+" g carbs":"",c&&h>=.25?Math.round(c/h)+" g/h":"",fl?fl+" ml":""].filter(Boolean).join(" · ")}</div><div class="chips">`+
+  FUEL.map(f=>`<span class="chip">${fmt(f.at)}<i>${fuelTxt(f)}</i></span>`).join("")+"</div>";el.hidden=false}
 function renderSummary(log,e,km){const ev=log.events,segs=ev.map((x,k)=>({dur:Math.max(0.1,(k+1<ev.length?ev[k+1].t:e)-x.t),speed:x.speed,incline:x.incline}));
  const pl=B.map(b=>({dur:b.dur,speed:b.speed,incline:b.incline})),pt=pl.reduce((a,g)=>a+g.dur,0),tot=Math.max(pt,segs.reduce((a,g)=>a+g.dur,0)),vt=vertOf(ev,e);
  const pv=B.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0);
@@ -635,13 +657,14 @@ $("start").onclick=()=>{try{localStorage.setItem("tc_json",$("json").value)}catc
  FB={rpe:null,feel:null,note:"",carbs:[]};LAST_LOG=null;$("fbnote").value="";renderFB();
  try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){AC=null}
  try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(l=>wl=l).catch(()=>{})}catch(e){}
- S={hr:[],t0:Date.now(),started:new Date().toISOString(),pausedMs:0,paused:false,skip:0,idx:-1,events:[],alerted:-1,lead:+$("lead").value||10,speed:B[0].speed,incline:B[0].incline,end:B.reduce((a,b)=>a+b.dur,0)};
+ S={hr:[],t0:Date.now(),started:new Date().toISOString(),pausedMs:0,paused:false,skip:0,idx:-1,events:[],alerted:-1,fz:FUEL.map(f=>({...f,st:0})),fa:-1,fp:-1,fl:0,lead:+$("lead").value||10,speed:B[0].speed,incline:B[0].incline,end:B.reduce((a,b)=>a+b.dur,0)};
+ $("fuelcard").hidden=!FUEL.length;document.querySelector(".toprow").classList.toggle("hasfuel",!!FUEL.length);fuelTick(0);
  show("run");$("pause").textContent="Pause";$("stop").disabled=true;$("stop").className="ghost";
  $("tl").innerHTML=chart(B.map(b=>({dur:b.dur,speed:b.speed,incline:b.incline})),S.end,{playhead:true,fill:true});
  BLE.live={};
  if(BLE.on()){S.hold=true;$("banner").className="banner soon";$("banner").textContent="Starting treadmill…";
   BLE.begin(B[0].speed,B[0].incline).then(()=>{
-   if(S){S.t0=Date.now();S.pausedMs=0;S.skip=0;S.hold=false;S.events=[];S.hr=[];S.idx=-1;S.alerted=-1;beep(1,660)}})}
+   if(S){S.t0=Date.now();S.pausedMs=0;S.skip=0;S.hold=false;S.events=[];S.hr=[];S.idx=-1;S.alerted=-1;S.fz.forEach(f=>f.st=0);S.fa=S.fp=-1;beep(1,660)}})}
  beep(1,660);tick=setInterval(loop,200);clearInterval(hrt);hrt=setInterval(hrLoop,1000);hrLoop();loop()};
 function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){finish(false);return}
  const i=curIdx(e),b=B[i],nb=B[i+1],rem=b.t0+b.dur-e;
@@ -657,11 +680,27 @@ function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){fi
  $("ps").textContent=`target ${S.speed.toFixed(1)}`;$("pp").textContent=`target ${pace(S.speed)}`;$("pi").textContent=`target ${S.incline.toFixed(0)}`;
  if(BLE.on()&&BLE.live.speed!=null){if(Math.abs(BLE.live.speed-S.speed)>0.3){S.mis=S.mis||Date.now();if(Date.now()-S.mis>8000&&!S.resent){S.resent=true;BLE.send(S.speed,S.incline)}}else{S.mis=0;S.resent=false}}
  $("nxl").textContent=nb?nb.label:"finish";$("nxv").textContent=nb?`${nb.speed} km/h · ${nb.incline}% · ${fmt(nb.dur)}`:"";
+ fuelTick(e);
  $("prog").style.width=(e/S.end*100)+"%";$("el").textContent=fmt(e);$("rem").textContent=fmt(S.end-e);
  $("vert").textContent=Math.round(vertOf(S.events,e));$("dist").textContent=distOf(S.events,e).toFixed(2);
  $("mach").textContent=BLE.cp?`${BLE.live.dist??"–"} m · +${BLE.live.asc??"–"} m`:"not connected";
  const ph=$("tl").querySelector(".playhead");if(ph)ph.style.left=(e/S.end*100)+"%";const cr=$("tl").querySelector(".cliprect");if(cr)cr.setAttribute("width",(e/S.end*1000).toFixed(1));
  $("ring").style.width=(100*(1-Math.max(0,rem)/b.dur))+"%";$("blkno").textContent="Block "+(i+1)+" / "+B.length}
+// ---- fuel plan: reminders in workout time (pauses don't count); tap the card to log it as taken
+function fuelTick(e){const F=S&&S.fz;if(!F||!F.length)return;
+ for(let k=0;k<F.length-1;k++)if(F[k].st===0&&F[k+1].at<=e)F[k].st=2;
+ const k=F.findIndex(f=>f.st===0),card=$("fuelcard"),miss=F.filter(f=>f.st===2).length,got=F.filter(f=>f.st===1).reduce((a,f)=>a+f.c,0);
+ $("fxt").textContent="Next fuel"+(miss?" · "+miss+" missed":"");
+ if(k<0){card.className="nextcard fuelcard";$("fxt").textContent="Fuel"+(miss?" · "+miss+" missed":"");$("fxl").textContent="done";$("fxv").textContent=got+" g carbs logged";return}
+ const f=F[k],d=f.at-e;
+ $("fxl").textContent=fuelTxt(f)||"Fuel";
+ if(d>0){card.className="nextcard fuelcard"+(d<=30?" live":"");$("fxv").textContent="in "+fmt(d)+" · at "+fmt(f.at);
+  if(d<=30&&S.fp!==k){S.fp=k;beep(1,1400,.1);vib(100)}}
+ else{card.className="nextcard fuelcard due";$("fxt").textContent="Fuel now · tap when taken"+(miss?" · "+miss+" missed":"");$("fxv").textContent="due "+fmt(-d)+" ago";
+  if(S.fa!==k){S.fa=k;S.fl=e;beep(3,1568,.12);vib([200,100,200,100,200]);say("Fuel now. "+(f.c?f.c+" grams carbs":"")+(f.n?" "+f.n:""))}
+  else if(e-S.fl>=60){S.fl=e;beep(2,1568,.12);vib([200,100,200])}}}
+$("fuelcard").onclick=()=>{if(!S||S.paused||S.hold||!S.fz)return;const e=elapsed(),k=S.fz.findIndex(f=>f.st===0);if(k<0)return;const f=S.fz[k];if(f.at-e>30)return;
+ f.st=1;if(f.c){FB.carbs.push([Math.round(e),f.c]);fbChanged()}fuelTick(e)};
 function pace(kmh){if(!(kmh>0))return"–";const t=Math.round(3600/kmh);return Math.floor(t/60)+":"+String(t%60).padStart(2,"0")}
 function hrLoop(){if(!S)return;const b=hrNow();$("hrv").textContent=b??"–";
  if(HR.want&&HR.dev&&HR.dev.gatt.connected&&!S.hold&&!S.paused){if(b==null){S.hrGap=(S.hrGap||0)+1;if(S.hrGap===10)BLE.st("No heart-rate signal from the strap.",true,"hrgap")}else{if(S.hrGap>=10)BLE.clr("hrgap");S.hrGap=0}}
