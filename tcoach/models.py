@@ -8,9 +8,10 @@ JSON schema (all keys short on purpose, so a coach/LLM can emit it easily):
   "date": "2026-10-20",               # optional
   "notes": "free text",
   "fuel": [                           # optional nutrition plan, times in workout time (pauses don't count)
-    {"at": "20:00", "carbs_g": 30, "fluid_ml": 150, "note": "Gel"},
-    {"every": "20:00", "carbs_g": 30, "note": "Gel"}      # repeating: from 'from' (default = every) until 'until' (default end)
-  ],
+    {"at": "20:00", "kind": "gel", "flask": 1, "note": "V4-Mix"},       # amount = fraction of one FULL flask
+    {"every": "20:00", "kind": "drink", "flask": 0.5, "note": "V3-Mix"}  # repeating: from 'from' (default = every) until 'until'
+  ],                                  # kind gel: 1 flask = 110 g powder / 150 ml, drink: 1 flask = 37.5 g / 500 ml
+                                      # (principles/nutrition.md); carbs_g / fluid_ml are derived, or set explicitly
   "blocks": [
     {"label": "Warm-up", "duration": "10:00", "speed": 8.0, "incline": 2},
     {"repeat": 4, "label": "Main set", "blocks": [
@@ -145,15 +146,25 @@ def climb_rise_m(distance_m: float, incline_pct: float) -> float:
     return distance_m * math.sin(math.atan(incline_pct / 100.0))
 
 
+# One FULL flask, from Tito's nutrition principles: gel = 110 g powder (+~90 ml water) = 150 ml,
+# drink = 37.5 g powder + 500 ml water. Powder is ~97-98 % carbs, so g powder ~ g carbs.
+FLASK = {"gel": {"carbs_g": 110, "fluid_ml": 150}, "drink": {"carbs_g": 37.5, "fluid_ml": 500}}
+
+
 @dataclass
 class Fuel:
     at_s: int
     carbs_g: int = 0
     fluid_ml: int = 0
     note: str = ""
+    kind: str = ""      # "gel" | "drink" | "" (free entry)
+    flask: float = 0.0  # fraction of one full flask
 
     def to_dict(self) -> dict:
         d = {"at": fmt_clock(self.at_s)}
+        if self.kind:
+            d["kind"] = self.kind
+            d["flask"] = self.flask
         if self.carbs_g:
             d["carbs_g"] = self.carbs_g
         if self.fluid_ml:
@@ -188,6 +199,16 @@ def parse_fuel(items, total_s: int) -> list[Fuel]:
             raise ValueError("fuel entries must be objects")
         carbs, fluid = _amount(it, "carbs_g", 300), _amount(it, "fluid_ml", 2000)
         note = str(it.get("note", "")).strip()[:80]
+        kind, flask = str(it.get("kind", "") or "").strip().lower(), 0.0
+        if kind:
+            if kind not in FLASK:
+                raise ValueError(f"fuel kind must be one of: {', '.join(FLASK)}")
+            flask = it.get("flask", 1)
+            if isinstance(flask, bool) or not isinstance(flask, (int, float)) or not 0 < flask <= 4:
+                raise ValueError("fuel flask must be a number above 0 up to 4 (1 = one full flask)")
+            flask = round(float(flask), 2)
+            carbs = carbs or int(round(flask * FLASK[kind]["carbs_g"]))
+            fluid = fluid or int(round(flask * FLASK[kind]["fluid_ml"]))
         if not (carbs or fluid or note):
             raise ValueError("fuel entry needs carbs_g, fluid_ml or note")
         if "every" in it:
@@ -197,7 +218,7 @@ def parse_fuel(items, total_s: int) -> list[Fuel]:
             t = parse_duration(it["from"]) if "from" in it else step
             end = parse_duration(it["until"]) if "until" in it else total_s
             while t <= min(end, total_s):
-                out.append(Fuel(t, carbs, fluid, note))
+                out.append(Fuel(t, carbs, fluid, note, kind, flask))
                 t += step
         else:
             t = parse_duration(it["at"]) if "at" in it else None
@@ -205,7 +226,7 @@ def parse_fuel(items, total_s: int) -> list[Fuel]:
                 raise ValueError("fuel entry needs 'at' or 'every'")
             if t > total_s:
                 raise ValueError(f"fuel at {fmt_clock(t)} is after the end of the workout ({fmt_clock(total_s)})")
-            out.append(Fuel(t, carbs, fluid, note))
+            out.append(Fuel(t, carbs, fluid, note, kind, flask))
     if len(out) > 60:
         raise ValueError("at most 60 fuel entries")
     return sorted(out, key=lambda f: f.at_s)

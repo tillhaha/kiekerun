@@ -34,7 +34,7 @@ STEP_NEW_RE = re.compile(
 )
 FUEL_HEAD = re.compile(r"^fuel plan:?$", re.I)
 FUEL_RE = re.compile(
-    r"^@?\s*(?P<at>\d+(?::\d{2}){1,2})\s*[·|,]?\s*(?:(?P<c>\d+)\s*g(?:\s*carbs?)?)?\s*[·|,]?\s*"
+    r"^@?\s*(?P<at>\d+(?::\d{2}){1,2})\s*[·|,]?\s*(?:(?P<fl>\d+(?:\.\d+)?)\s*(?P<kind>gel|drink)-?flasks?)?\s*[·|,]?\s*(?:(?P<c>\d+)\s*g(?:\s*carbs?)?)?\s*[·|,]?\s*"
     r"(?:(?P<f>\d+)\s*ml)?\s*[·|,]?\s*(?P<note>.*)$", re.I)
 REPEAT_RE = re.compile(r"^(?P<label>.*?)\s*(?P<n>\d+)x\s*$", re.I)
 
@@ -101,6 +101,8 @@ def to_intervals_text(workout: Workout) -> str:
         lines.append("Fuel plan")
         for f in workout.fuel:
             parts = [f"@ {fmt_clock(f.at_s)}"]
+            if f.kind:
+                parts.append(f"{f.flask:g} {f.kind.capitalize()}-Flask")
             if f.carbs_g:
                 parts.append(f"{f.carbs_g} g carbs")
             if f.fluid_ml:
@@ -129,9 +131,10 @@ def parse_intervals_text(text: str, name: str = "Treadmill workout", mode: str =
             continue
         if in_fuel:
             fm = FUEL_RE.match(line)
-            if fm and (fm.group("c") or fm.group("f") or fm.group("note")):
+            if fm and (fm.group("c") or fm.group("f") or fm.group("note") or fm.group("kind")):
+                kind = (fm.group("kind") or "").lower()
                 fuel.append(Fuel(parse_duration(fm.group("at")), int(fm.group("c") or 0), int(fm.group("f") or 0),
-                                 fm.group("note").strip()))
+                                 fm.group("note").strip(), kind, float(fm.group("fl")) if kind else 0.0))
             else:
                 warnings.append(f"unparsed fuel line: {line}")
             continue

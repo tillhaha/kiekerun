@@ -97,10 +97,16 @@ A workout may carry a `fuel` list (times are workout time, pauses do not count):
 
 ```json
 "fuel": [
-  {"at": "20:00", "carbs_g": 30, "fluid_ml": 150, "note": "Gel"},
-  {"every": "20:00", "from": "10:00", "until": "2:00:00", "carbs_g": 30, "note": "Gel"}
+  {"at": "20:00", "kind": "gel", "flask": 0.5, "note": "V4-Mix"},
+  {"every": "20:00", "from": "10:00", "until": "2:00:00", "kind": "drink", "flask": 1, "note": "V3-Mix"}
 ]
 ```
+
+`kind` is `gel` or `drink`, `flask` is the fraction of one FULL flask (default 1). Reference amounts come from the nutrition
+principles: 1 gel flask = 110 g powder / 150 ml, 1 drink flask = 37.5 g powder / 500 ml (powder ~ carbs, so 1 gel flask ~ 110 g
+carbs). `carbs_g` and `fluid_ml` are derived from that, or can be set explicitly (explicit carbs win). `note` is free text,
+e.g. the sugar-mix version. Without `kind`, give `carbs_g` / `fluid_ml` directly. Calendar text:
+`@ 20:00 · 0.5 Gel-Flask · 55 g carbs · 75 ml · V4-Mix`.
 
 `save_treadmill_workout` accepts it and writes a `Fuel plan` section (`@ 20:00 · 30 g carbs · 150 ml · Gel`) into the
 event description; "Today's workout" reads it back. KiekeRun shows the plan on the Plan screen and a "Next fuel" box in the

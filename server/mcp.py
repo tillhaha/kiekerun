@@ -70,13 +70,17 @@ WRITE_TOOLS = [
                     "(e.g. 'Steady Vertical'): time, km/h, min/km and incline are written into the calendar text automatically as "
                     "'<label> 30 min @ 5.5 km/h (10:55 min/km) @ 15% incline', so do not put them in the label. "
                     "Zone info belongs in notes. A fueling plan goes into 'fuel' (shown in KiekeRun as an overview and as reminders "
-                    "during the run, times are workout time): [{at:'20:00', carbs_g:30, fluid_ml:150, note:'Gel'}] or repeating "
-                    "[{every:'20:00', from?:'10:00', until?:'2:00:00', carbs_g:30, note:'Gel'}].",
+                    "during the run, times are workout time). Amounts are fractions of one FULL flask per Tito's nutrition principles: "
+                    "kind 'gel' (1 flask = 110 g powder, 150 ml) or 'drink' (1 flask = 37.5 g powder, 500 ml); carbs_g and fluid_ml are "
+                    "derived. 'note' is free text for the sugar mix version (e.g. 'V4-Mix', 'V3-Mix'). "
+                    "[{at:'20:00', kind:'gel', flask:1, note:'V4-Mix'}] or repeating "
+                    "[{every:'20:00', from?:'10:00', until?:'2:00:00', kind:'drink', flask:0.5, note:'V3-Mix'}]. "
+                    "kind/flask are optional; without them give carbs_g / fluid_ml directly.",
      "inputSchema": {"type": "object", "required": ["date", "workout"], "properties": {
          "date": _DATE,
          "workout": {"type": "object", "required": ["name", "blocks"], "description":
                      "{name, notes?, blocks:[{label, duration:'mm:ss' or 'h:mm:ss', speed:km/h, incline:%} or "
-                     "{repeat:N, label?, blocks:[...]}], fuel?:[{at|every, carbs_g?, fluid_ml?, note?}]}", "properties": {
+                     "{repeat:N, label?, blocks:[...]}], fuel?:[{at|every, kind?:'gel'|'drink', flask?:0-4, carbs_g?, fluid_ml?, note?}]}", "properties": {
                          "name": {"type": "string"}, "notes": {"type": "string"}, "blocks": {"type": "array"},
                          "fuel": {"type": "array", "maxItems": 60}}}}},
      "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}},

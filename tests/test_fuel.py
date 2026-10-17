@@ -50,3 +50,33 @@ def test_json_roundtrip_and_text_roundtrip():
 def test_no_fuel_leaves_text_unchanged():
     assert "Fuel plan" not in to_intervals_text(Workout.from_dict(BASE))
     assert "fuel" not in Workout.from_dict(BASE).to_dict()
+
+
+def test_flask_amounts_are_derived_from_the_principles():
+    w = wk([{"at": "10:00", "kind": "gel", "flask": 0.5, "note": "V4-Mix"},
+            {"at": "20:00", "kind": "drink", "note": "V3-Mix"},
+            {"at": "30:00", "kind": "gel", "flask": 1, "carbs_g": 100}])
+    g, d, o = w.fuel
+    assert (g.carbs_g, g.fluid_ml, g.flask) == (55, 75, 0.5)
+    assert (d.carbs_g, d.fluid_ml, d.flask) == (38, 500, 1.0)   # 37.5 g rounds to 38
+    assert o.carbs_g == 100 and o.fluid_ml == 150               # explicit carbs win, ml still derived
+
+
+@pytest.mark.parametrize("bad", [
+    [{"at": "5:00", "kind": "bar", "flask": 1}],
+    [{"at": "5:00", "kind": "gel", "flask": 0}],
+    [{"at": "5:00", "kind": "gel", "flask": 9}],
+    [{"at": "5:00", "kind": "gel", "flask": "x"}],
+])
+def test_rejects_bad_flask(bad):
+    with pytest.raises(ValueError):
+        wk(bad)
+
+
+def test_flask_text_roundtrip():
+    w = wk([{"at": "10:00", "kind": "gel", "flask": 0.5, "note": "V4-Mix"}, {"at": "20:00", "kind": "drink", "flask": 1}])
+    text = to_intervals_text(w)
+    assert "@ 10:00 · 0.5 Gel-Flask · 55 g carbs · 75 ml · V4-Mix" in text
+    assert "@ 20:00 · 1 Drink-Flask · 38 g carbs · 500 ml" in text
+    w2, warns = parse_intervals_text(text)
+    assert warns == [] and w2.to_dict()["fuel"] == w.to_dict()["fuel"]

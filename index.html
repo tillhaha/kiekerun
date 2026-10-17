@@ -174,6 +174,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 [data-theme="night"] .nextcard{background:transparent;border:1px solid var(--line)}
 .toprow.hasfuel{grid-template-columns:minmax(0,1fr) 250px 270px}
 .fuelcard{cursor:default;user-select:none}
+.fuelcard b{font-size:22px}
 .fuelcard.live{cursor:pointer;box-shadow:inset 5px 0 0 var(--highlight)}
 .fuelcard.due{background:var(--alert);color:var(--alert-ink);border-color:transparent;cursor:pointer;animation:fpulse 1s steps(2,end) infinite}
 .fuelcard.due .lbl,.fuelcard.due .nv{color:var(--alert-ink)}
@@ -425,7 +426,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
 <script>
 
 const EX={
- ex1:{name:"Threshold 4x8",notes:"Lactate threshold on 6% incline",fuel:[{every:"20m",carbs_g:30,fluid_ml:150,note:"Gel"}],blocks:[
+ ex1:{name:"Threshold 4x8",notes:"Lactate threshold on 6% incline",fuel:[{at:"20m",kind:"gel",flask:0.5,note:"V4-Mix"},{at:"40m",kind:"drink",flask:1,note:"V3-Mix"},{at:"60m",kind:"gel",flask:0.5,note:"V4-Mix"}],blocks:[
   {label:"Warm-up",duration:"10m",speed:8,incline:2},
   {repeat:4,label:"Threshold",blocks:[{label:"Work",duration:"8m",speed:10.5,incline:6},{label:"Float",duration:"3m",speed:6,incline:2}]},
   {label:"Cool-down",duration:"8m",speed:7,incline:1}]},
@@ -444,10 +445,15 @@ function pdur(v){if(typeof v==="number")return v;v=String(v).trim();let m;
 function flat(w){const out=[];const add=(b,rl)=>out.push({label:b.label||"Block",dur:pdur(b.duration),speed:+b.speed,incline:+b.incline});
  for(const s of w.blocks){if(s.repeat){for(let i=1;i<=s.repeat;i++)for(const b of s.blocks)add({...b,label:(s.label?s.label+" "+i+"/"+s.repeat+" · ":"")+(b.label||"")})}else add(s)}
  let t=0;out.forEach(b=>{b.t0=t;t+=b.dur});return out}
-function fuelOf(w,tot){const out=[],add=(t,f)=>{if(t>=0&&t<=tot)out.push({at:t,c:+f.carbs_g||0,f:+f.fluid_ml||0,n:String(f.note||"")})};
+const FLASK={gel:{c:110,ml:150},drink:{c:37.5,ml:500}};
+const fnum=x=>String(+(+x).toFixed(2));
+function fuelOf(w,tot){const out=[],add=(t,f)=>{if(t<0||t>tot)return;const k=FLASK[String(f.kind||"").toLowerCase()],fl=k?+(f.flask??1):0;
+  out.push({at:t,k:k?String(f.kind).toLowerCase():"",fl,c:+f.carbs_g||(k?Math.round(fl*k.c):0),f:+f.fluid_ml||(k?Math.round(fl*k.ml):0),n:String(f.note||"")})};
  for(const f of (Array.isArray(w.fuel)?w.fuel:[])){if(f.every){const st=pdur(f.every),end=f.until?pdur(f.until):tot;for(let t=f.from?pdur(f.from):st;t<=Math.min(end,tot);t+=st)add(t,f)}else if(f.at!=null)add(pdur(f.at),f)}
  return out.sort((a,b)=>a.at-b.at)}
-const fuelTxt=f=>[f.n,f.c?f.c+" g":"",f.f?f.f+" ml":""].filter(Boolean).join(" · ");
+const flaskTxt=f=>f.k?fnum(f.fl)+" "+f.k[0].toUpperCase()+f.k.slice(1)+"-Flask":"";
+const fuelTxt=f=>f.k?[flaskTxt(f),f.n].filter(Boolean).join(" · "):[f.n,f.c?f.c+" g":"",f.f?f.f+" ml":""].filter(Boolean).join(" · ");
+const fuelSub=f=>f.k?[f.c?f.c+" g":"",f.f?f.f+" ml":""].filter(Boolean).join(" · "):"";
 const rise=(km,inc)=>km*1000*Math.sin(Math.atan(inc/100));
 function validate(bl){const is=[];bl.forEach((b,i)=>{
  if(b.speed<1||b.speed>22)is.push(["error",`Block ${i+1} ${b.label}: ${b.speed} km/h outside 1–22`]);
@@ -632,8 +638,9 @@ function renderPreview(B){const tot=B.reduce((a,b)=>a+b.dur,0);
   B.map((b,i)=>`<tr><td>${i+1}</td><td>${b.label}</td><td>${fmt(b.t0)}</td><td>${fmt(b.dur)}</td><td>${(+b.speed).toFixed(1)}</td><td>${b.incline}%</td></tr>`).join("")+'</tbody></table></div>'}
 function renderFuelPv(tot){const el=$("pvfuel");if(!FUEL.length){el.hidden=true;return}
  const c=FUEL.reduce((a,f)=>a+f.c,0),fl=FUEL.reduce((a,f)=>a+f.f,0),h=tot/3600;
- el.innerHTML=`<h2 class="lbl">Fuel plan</h2><div class="fsum">${[c?c+" g carbs":"",c&&h>=.25?Math.round(c/h)+" g/h":"",fl?fl+" ml":""].filter(Boolean).join(" · ")}</div><div class="chips">`+
-  FUEL.map(f=>`<span class="chip">${fmt(f.at)}<i>${fuelTxt(f)}</i></span>`).join("")+"</div>";el.hidden=false}
+ const fk=k=>FUEL.filter(f=>f.k===k).reduce((a,f)=>a+f.fl,0),g=fk("gel"),d=fk("drink");
+ el.innerHTML=`<h2 class="lbl">Fuel plan</h2><div class="fsum">${[g?fnum(g)+" Gel-Flask"+(g>1?"s":""):"",d?fnum(d)+" Drink-Flask"+(d>1?"s":""):"",c?c+" g carbs":"",c&&h>=.25?Math.round(c/h)+" g/h":"",fl?fl+" ml":""].filter(Boolean).join(" · ")}</div><div class="chips">`+
+  FUEL.map(f=>`<span class="chip">${fmt(f.at)}<i>${[fuelTxt(f),fuelSub(f)].filter(Boolean).join(" · ")}</i></span>`).join("")+"</div>";el.hidden=false}
 function renderSummary(log,e,km){const ev=log.events,segs=ev.map((x,k)=>({dur:Math.max(0.1,(k+1<ev.length?ev[k+1].t:e)-x.t),speed:x.speed,incline:x.incline}));
  const pl=B.map(b=>({dur:b.dur,speed:b.speed,incline:b.incline})),pt=pl.reduce((a,g)=>a+g.dur,0),tot=Math.max(pt,segs.reduce((a,g)=>a+g.dur,0)),vt=vertOf(ev,e);
  const pv=B.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0);
@@ -694,10 +701,10 @@ function fuelTick(e){const F=S&&S.fz;if(!F||!F.length)return;
  if(k<0){card.className="nextcard fuelcard";$("fxt").textContent="Fuel"+(miss?" · "+miss+" missed":"");$("fxl").textContent="done";$("fxv").textContent=got+" g carbs logged";return}
  const f=F[k],d=f.at-e;
  $("fxl").textContent=fuelTxt(f)||"Fuel";
- if(d>0){card.className="nextcard fuelcard"+(d<=30?" live":"");$("fxv").textContent="in "+fmt(d)+" · at "+fmt(f.at);
+ if(d>0){card.className="nextcard fuelcard"+(d<=30?" live":"");$("fxv").textContent="in "+fmt(d)+" · "+(fuelSub(f)||"at "+fmt(f.at));
   if(d<=30&&S.fp!==k){S.fp=k;beep(1,1400,.1);vib(100)}}
- else{card.className="nextcard fuelcard due";$("fxt").textContent="Fuel now · tap when taken"+(miss?" · "+miss+" missed":"");$("fxv").textContent="due "+fmt(-d)+" ago";
-  if(S.fa!==k){S.fa=k;S.fl=e;beep(3,1568,.12);vib([200,100,200,100,200]);say("Fuel now. "+(f.n?f.n+". ":"")+(f.c?f.c+" grams carbs":""))}
+ else{card.className="nextcard fuelcard due";$("fxt").textContent="Fuel now · tap when taken"+(miss?" · "+miss+" missed":"");$("fxv").textContent="due "+fmt(-d)+" ago"+(fuelSub(f)?" · "+fuelSub(f):"");
+  if(S.fa!==k){S.fa=k;S.fl=e;beep(3,1568,.12);vib([200,100,200,100,200]);say("Fuel now. "+(f.k?flaskTxt(f).replace("-"," ")+". ":"")+(f.n?f.n+". ":"")+(f.c?f.c+" grams carbs":""))}
   else if(e-S.fl>=60){S.fl=e;beep(2,1568,.12);vib([200,100,200])}}}
 $("fuelcard").onclick=()=>{if(!S||S.paused||S.hold||!S.fz)return;const e=elapsed(),k=S.fz.findIndex(f=>f.st===0);if(k<0)return;const f=S.fz[k];if(f.at-e>30)return;
  f.st=1;if(f.c){FB.carbs.push([Math.round(e),f.c]);fbChanged()}fuelTick(e)};
