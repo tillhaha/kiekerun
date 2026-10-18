@@ -344,7 +344,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <div class="recent">
           <button id="ex1"><b>Threshold 4×8</b><span>1:02:00 · 9.1 km</span></button>
           <button id="ex2"><b>Power hike 3×12</b><span>1:03:00 · 5.4 km</span></button>
-          <button id="ex3"><b>Control test</b><span>3:00 · 0.2 km</span></button>
+          <button id="ex3"><b>Control test + fuel</b><span>3:00 · 0.2 km</span></button>
         </div>
         <details class="paste" id="pastebox"><summary>Paste or edit JSON</summary>
           <textarea id="json" spellcheck="false" placeholder='{"name":"…","blocks":[{"label":"…","duration":"10m","speed":8,"incline":2},{"repeat":4,"blocks":[…]}]}'></textarea>
@@ -426,11 +426,11 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
 <script>
 
 const EX={
- ex1:{name:"Threshold 4x8",notes:"Lactate threshold on 6% incline",fuel:[{at:"20m",kind:"gel",flask:0.5,note:"V4-Mix"},{at:"40m",kind:"drink",flask:1,note:"V3-Mix"},{at:"60m",kind:"gel",flask:0.5,note:"V4-Mix"}],blocks:[
+ ex1:{name:"Threshold 4x8",notes:"Lactate threshold on 6% incline",blocks:[
   {label:"Warm-up",duration:"10m",speed:8,incline:2},
   {repeat:4,label:"Threshold",blocks:[{label:"Work",duration:"8m",speed:10.5,incline:6},{label:"Float",duration:"3m",speed:6,incline:2}]},
   {label:"Cool-down",duration:"8m",speed:7,incline:1}]},
- ex3:{name:"Control test 1min",notes:"Bluetooth control test: six 10 s steps inside one minute. Set heads-up to 3 s.",blocks:[{label:"Warm-up",duration:"1m",speed:3,incline:0},{label:"Step 1",duration:"10s",speed:4,incline:5},{label:"Step 2",duration:"10s",speed:5,incline:10},{label:"Step 3",duration:"10s",speed:6,incline:15},{label:"Step 4",duration:"10s",speed:5,incline:8},{label:"Step 5",duration:"10s",speed:4,incline:3},{label:"Step 6",duration:"10s",speed:3,incline:0},{label:"Cool-down",duration:"1m",speed:3,incline:0}]},
+ ex3:{name:"Control test + fuel",notes:"Bluetooth control test: six 10 s steps inside one minute. Set heads-up to 3 s. Fuel reminders at 0:30 and 1:30.",fuel:[{at:"30s",kind:"gel",flask:0.5,note:"V4-Mix"},{at:"1m30",kind:"drink",flask:0.5,note:"V3-Mix"}],blocks:[{label:"Warm-up",duration:"1m",speed:3,incline:0},{label:"Step 1",duration:"10s",speed:4,incline:5},{label:"Step 2",duration:"10s",speed:5,incline:10},{label:"Step 3",duration:"10s",speed:6,incline:15},{label:"Step 4",duration:"10s",speed:5,incline:8},{label:"Step 5",duration:"10s",speed:4,incline:3},{label:"Step 6",duration:"10s",speed:3,incline:0},{label:"Cool-down",duration:"1m",speed:3,incline:0}]},
  ex2:{name:"Power hike 3x12",notes:"Long steep intervals at hiking pace",blocks:[
   {label:"Warm-up",duration:"10m",speed:6,incline:5},
   {repeat:3,label:"Climb",blocks:[{label:"Hike",duration:"12m",speed:5,incline:30},{label:"Recover",duration:"3m",speed:4,incline:15}]},
