@@ -78,7 +78,7 @@ def call(c, name, args):
 def test_write_tools_hidden_and_refused_by_default(mk):
     c, cal = mk(write=False)
     tools = c.post(f"/mcp/{TOKEN}", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()["result"]["tools"]
-    assert [t["name"] for t in tools] == ["get_activities", "get_activity", "get_wellness", "get_plan_vs_actual"]
+    assert [t["name"] for t in tools] == ["get_activities", "get_activity", "get_wellness", "get_zones", "get_planned_workout", "get_plan_vs_actual"]
     assert all(t["annotations"] == {"readOnlyHint": True} for t in tools)
     r = call(c, "save_planned_workout", {"date": "2026-10-17", "name": "x"})
     assert r["isError"] and "disabled" in r["data"] and not [x for x in cal.calls if x[0] != "GET"]

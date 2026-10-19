@@ -71,7 +71,7 @@ def test_initialize_list_ping_and_notification(mk):
     assert r["protocolVersion"] == "2025-03-26" and r["capabilities"] == {"tools": {}}
     assert rpc(c, "initialize", {"protocolVersion": "1999"}).json()["result"]["protocolVersion"] == "2025-06-18"
     names = [t["name"] for t in rpc(c, "tools/list").json()["result"]["tools"]]
-    assert names == ["get_activities", "get_activity", "get_wellness", "get_plan_vs_actual"]
+    assert names == ["get_activities", "get_activity", "get_wellness", "get_zones", "get_planned_workout", "get_plan_vs_actual"]
     assert rpc(c, "ping").json()["result"] == {}
     assert rpc(c, "notifications/initialized", id_=None).status_code == 202
     assert rpc(c, "nope").json()["error"]["code"] == -32601
@@ -147,3 +147,26 @@ def test_helpers():
     assert resolve_range({}, "2026-10-16") == ("2026-10-03", "2026-10-16")
     assert summarize_activity({"id": 1}) == {"id": 1}
     assert summarize_wellness({"id": "2026-10-16"}) == {"date": "2026-10-16"}
+
+
+def test_zones_and_planned_workout_tools():
+    import json as _j
+    from server import mcp
+
+    class CL:
+        def athlete(self):
+            return {"sportSettings": [{"types": ["Run", "VirtualRun"], "lthr": 157, "max_hr": 172,
+                                       "hr_zones": [134, 148, 157, 164, 172], "junk": 1},
+                                      {"types": ["Ride"], "ftp": 250}]}
+
+        def get_event(self, eid):
+            return {"id": eid, "name": "Easy", "category": "WORKOUT", "start_date_local": "2026-10-20T00:00:00",
+                    "description": "- 10m Z1 HR", "workout_doc": {"duration": 600, "steps": [{"duration": 600, "hr": {"units": "hr_zone", "value": 1}}]}}
+
+    z = _j.loads(mcp.call_tool("get_zones", {"sport": "Run"}, CL(), "2026-10-19")["content"][0]["text"])
+    assert len(z["sport_settings"]) == 1 and z["sport_settings"][0]["hr_zones"] == [134, 148, 157, 164, 172]
+    assert "junk" not in z["sport_settings"][0]
+    w = _j.loads(mcp.call_tool("get_planned_workout", {"event_id": 5}, CL(), "2026-10-19")["content"][0]["text"])
+    assert w["has_structure"] and w["steps"][0]["hr"]["value"] == 1
+    with pytest.raises(mcp.ToolError):
+        mcp.call_tool("get_planned_workout", {"event_id": "x"}, CL(), "2026-10-19")

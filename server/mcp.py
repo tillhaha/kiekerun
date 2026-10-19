@@ -19,7 +19,7 @@ from typing import Callable
 
 from server.ratelimit import RateLimiter
 from tcoach.coach_data import (ACTIVITY_FIELDS, parse_day, plan_vs_actual, resolve_range, summarize_activity,
-                               summarize_activity_detail, summarize_wellness)
+                               summarize_activity_detail, summarize_wellness, summarize_workout_doc, summarize_zones)
 from tcoach.intervals_client import IntervalsClient, IntervalsError, slug
 from tcoach.intervals_text import to_intervals_text
 from tcoach.machine import has_errors, validate
@@ -44,6 +44,15 @@ TOOLS = [
     {"name": "get_wellness",
      "description": "Daily fitness and wellness: CTL, ATL, form (TSB), ramp rate, HRV, resting HR, sleep, readiness, weight, steps.",
      "inputSchema": {"type": "object", "properties": _RANGE}},
+    {"name": "get_zones",
+     "description": "Training zones as set in intervals.icu per sport: HR zones (upper limits in bpm, last = max HR), LTHR, "
+                    "threshold pace, pace and power zones. Use these instead of guessing when writing zone-based workouts.",
+     "inputSchema": {"type": "object", "properties": {"sport": {"type": "string", "description": "e.g. Run, Ride (default: all)"}}}},
+    {"name": "get_planned_workout",
+     "description": "One planned calendar workout as intervals.icu understood it: description plus the structured steps with their "
+                    "targets (hr / pace / power / %). Use it after saving to check that a step carries an HR or pace target and "
+                    "not power, because that is what the Garmin receives. event_id from get_plan_vs_actual or a save result.",
+     "inputSchema": {"type": "object", "properties": {"event_id": {"type": "integer"}}, "required": ["event_id"]}},
     {"name": "get_plan_vs_actual",
      "description": "Per day: planned calendar entries (workouts, races, notes) next to the activities actually done. "
                     "Planned workouts get status done / open / no paired activity.",
@@ -225,6 +234,19 @@ def call_tool(name: str, args: dict, cl: IntervalsClient, today: str, allow_writ
             oldest, newest = resolve_range(args, today)
             rows = [summarize_wellness(w) for w in cl.list_wellness(oldest, newest)]
             return _text({"oldest": oldest, "newest": newest, "days": rows})
+        if name == "get_zones":
+            sport = args.get("sport")
+            if sport is not None and not isinstance(sport, str):
+                raise ValueError("sport must be text")
+            return _text(summarize_zones(cl.athlete(), sport))
+        if name == "get_planned_workout":
+            eid = args.get("event_id")
+            if isinstance(eid, bool) or not isinstance(eid, int) or eid <= 0:
+                raise ValueError("event_id must be a positive integer")
+            ev = cl.get_event(eid)
+            if ev.get("category") != "WORKOUT":
+                raise ValueError("event is not a planned workout")
+            return _text(summarize_workout_doc(ev))
         if name == "get_plan_vs_actual":
             oldest, newest = resolve_range(args, today)
             events = cl.list_events(oldest, newest, category=None)

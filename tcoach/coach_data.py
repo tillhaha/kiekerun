@@ -171,3 +171,29 @@ def plan_vs_actual(events: list[dict], activities: list[dict], today: str) -> li
                 row["status"] = "no paired activity"
         day(d)["planned"].append(row)
     return [_clean(days[k]) | {"date": k} for k in sorted(days)]
+
+
+ZONE_KEYS = ("types", "lthr", "max_hr", "hr_zones", "hr_zone_names", "threshold_pace", "pace_units", "pace_zones",
+             "pace_zone_names", "ftp", "power_zones", "power_zone_names", "warmup_time", "cooldown_time")
+
+
+def summarize_zones(athlete: dict, sport: str | None = None) -> dict:
+    """HR / pace / power zones per sport as configured in intervals.icu (Settings > Sports).
+    hr_zones are the upper limits in bpm; the last one is max HR."""
+    out = []
+    for ss in athlete.get("sportSettings") or []:
+        types = ss.get("types") or []
+        if sport and sport not in types:
+            continue
+        out.append({k: ss[k] for k in ZONE_KEYS if ss.get(k) not in (None, [], "")})
+    return {"sport_settings": out, "note": "hr_zones = upper limit of each zone in bpm (last = max HR)"}
+
+
+def summarize_workout_doc(ev: dict) -> dict:
+    """What intervals.icu understood from a planned workout's text: the structured steps with their targets
+    (this is what gets exported to Garmin). A step with 'power' means a watt target on the watch."""
+    doc = ev.get("workout_doc") or {}
+    return {"event_id": ev.get("id"), "name": ev.get("name"), "date": (ev.get("start_date_local") or "")[:10],
+            "type": ev.get("type"), "description": ev.get("description"),
+            "duration_s": doc.get("duration"), "steps": doc.get("steps") or [],
+            "has_structure": bool(doc.get("steps"))}
