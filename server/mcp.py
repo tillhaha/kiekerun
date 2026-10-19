@@ -86,7 +86,9 @@ WRITE_TOOLS = [
      "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}},
     {"name": "save_planned_workout",
      "description": "Plan any other workout (outdoor run, strength, mobility, rest-day note as a workout) in the intervals.icu calendar. "
-                    "Description is intervals.icu workout text: one step per line starting with '- ' (e.g. '- 15m Z2 Pace'), "
+                    "Description is intervals.icu workout text: one step per line starting with '- ' (e.g. '- 15m Z2 Pace' or '- 15m Z2 HR'), "
+                    "ALWAYS name the target type after a zone (Pace or HR): a bare '- 15m Z2' is exported to the Garmin as a POWER target "
+                    "and makes the watch alarm about watts all run long. "
                     "free text above it is shown as notes. Saving the same name on the same day updates it in place.",
      "inputSchema": {"type": "object", "required": ["date", "name"], "properties": {
          "date": _DATE, "name": {"type": "string", "maxLength": 120},
@@ -113,6 +115,8 @@ class ToolError(Exception):
     pass
 
 
+ZONE_STEP = re.compile(r"^\s*-.*\bZ[1-7]\b", re.I)
+TARGET_TYPE = re.compile(r"\b(pace|hr|lthr|power|w|watts?)\b|%", re.I)
 _LABEL_TAIL = re.compile(r"\s+\d+(?::\d{2})?\s*(?:min|s)\s*@\s*\d+(?:[.,]\d+)?\s*km/h\b.*$", re.I)
 
 
@@ -177,8 +181,13 @@ def _write(name: str, args: dict, cl: IntervalsClient, today: str) -> dict:
                     raise ValueError(f"{key} must be a number {lo}-{hi}")
                 ev[field] = round(v * mult) if mult != 1 else v
         res = cl.upsert_event(ev)
-        return _text({"saved": True, "updated_existing": bool(res.get("_updated")), "event_id": res.get("id"),
-                      "date": day, "name": title})
+        out = {"saved": True, "updated_existing": bool(res.get("_updated")), "event_id": res.get("id"),
+               "date": day, "name": title}
+        bare = [ln.strip() for ln in desc.splitlines() if ZONE_STEP.search(ln) and not TARGET_TYPE.search(ln)]
+        if bare:
+            out["warning"] = ("these steps have a zone but no target type; intervals.icu sends them to Garmin as power targets "
+                              "(watt alarms). Add 'Pace' or 'HR' and save again: " + " | ".join(bare[:5]))
+        return _text(out)
     if name == "delete_planned_workout":
         eid = args.get("event_id")
         if isinstance(eid, bool) or not isinstance(eid, int) or eid <= 0:

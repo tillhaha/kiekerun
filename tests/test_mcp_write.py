@@ -174,3 +174,14 @@ def test_label_that_already_contains_the_numbers_is_not_doubled(mk):
     assert "- Steady Vertical 30 min @ 5.5 km/h (10:55 min/km) @ 15% incline\n" in text + "\n"
     assert "- Up 5 min @ 5.0 km/h (12:00 min/km) @ 10% incline" in text
     assert text.count("@ 5.5 km/h") == 1 and text.count("km/h") == 2
+
+
+def test_bare_zone_step_gets_a_power_target_warning():
+    import json as _j
+    from server import mcp
+    class CL:
+        def upsert_event(self, ev): return {"id": 1}
+    r = mcp.call_tool("save_planned_workout", {"date": "2026-10-25", "name": "x",
+                      "description": "- 10m Z1 WU\n- 30m Z2 HR\n- 5m Z1 Pace"}, CL(), "2026-10-19", allow_write=True)
+    out = _j.loads(r["content"][0]["text"])
+    assert "10m Z1 WU" in out["warning"] and "30m" not in out["warning"] and "5m" not in out["warning"]
