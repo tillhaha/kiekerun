@@ -112,3 +112,12 @@ e.g. the sugar-mix version. Without `kind`, give `carbs_g` / `fluid_ml` directly
 event description; "Today's workout" reads it back. KiekeRun shows the plan on the Plan screen and a "Next fuel" box in the
 Run top row (countdown, beep/vibration/voice when due, repeated every minute). Tap the box (from 30 s before) to mark it
 taken; entries with carbs are logged into the feedback carb log. A fuel point is marked missed when the next one is due.
+
+## AeT drift test
+
+Example workout "AeT drift test" (10 min warm-up, 30 min constant 5.5 km/h @ 16%, 5 min cool-down). Standardised: chest strap,
+rested, water only, same fan and room, no speed/incline changes in the test block, repeat about every 4 weeks.
+For every constant-load block of 20+ minutes (speed spread <= 0.3 km/h, incline spread <= 1 pt, HR present in >= 80 % of each half)
+the activity description gets a line `HR 140 -> 147 · drift +4.8%` (decoupling of speed/HR, first vs second half).
+Reading: under ~3 % threshold at or above this HR, ~3-5 % at it, over ~6 % below it. The average HR at the same load over
+repeated tests is the efficiency trend.

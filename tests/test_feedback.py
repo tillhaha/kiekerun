@@ -71,3 +71,31 @@ def test_description_omits_flat_blocks_and_empty_parts():
     st = block_stats(samples(60, 8, 0), [{"label": "Flat", "t0": 0, "dur": 60}])
     assert build_description(Feedback(), st, 60, None) == ""
     assert "per block" not in build_description(Feedback(note="x"), st, 60, None)
+
+
+def hr_samples(n, speed, incline, hr_fn):
+    return [Sample(i, speed, incline, hr_fn(i)) for i in range(n)]
+
+
+def test_drift_for_constant_load_block():
+    s = hr_samples(1800, 5.5, 16, lambda i: 140 if i < 900 else 147)
+    st = block_stats(s, [{"label": "AeT test", "t0": 0, "dur": 1800}])[0]
+    assert (st.hr_first, st.hr_second) == (140, 147)
+    assert st.drift_pct == pytest.approx(4.8, abs=0.01)
+    d = build_description(Feedback(), st and [st], 1800, None)
+    assert "HR drift" in d and "HR 140 -> 147 · drift +4.8%" in d
+
+
+def test_no_drift_for_short_adjusted_or_hr_less_blocks():
+    short = block_stats(hr_samples(900, 5.5, 16, lambda i: 140), [{"label": "x", "t0": 0, "dur": 900}])[0]
+    assert short.drift_pct is None
+    adjusted = [Sample(i, 5.5 if i < 900 else 6.5, 16, 140) for i in range(1800)]
+    assert block_stats(adjusted, [{"label": "x", "t0": 0, "dur": 1800}])[0].drift_pct is None
+    nohr = block_stats(hr_samples(1800, 5.5, 16, lambda i: None), [{"label": "x", "t0": 0, "dur": 1800}])[0]
+    assert nohr.drift_pct is None
+    assert "HR drift" not in build_description(Feedback(note="n"), [nohr], 1800, None)
+
+
+def test_negative_drift_when_hr_falls():
+    s = hr_samples(1800, 5.5, 16, lambda i: 145 if i < 900 else 142)
+    assert block_stats(s, [{"label": "x", "t0": 0, "dur": 1800}])[0].drift_pct < 0

@@ -16,6 +16,9 @@ from .session import Sample
 
 MAX_NOTE = 2000
 MAX_CARBS_ENTRY_G = 300
+DRIFT_MIN_S = 1200          # blocks of 20+ min get a first-half / second-half HR comparison
+DRIFT_MAX_SPEED_SPREAD = 0.3   # km/h; more than that and the load was not constant
+DRIFT_MAX_INCLINE_SPREAD = 1.0  # percentage points
 
 
 @dataclass
@@ -71,6 +74,9 @@ class BlockStat:
     ascent_m: float
     vam_m_h: float
     avg_hr: int | None
+    hr_first: int | None = None   # avg HR of the first / second half, constant-load blocks of 20+ min only
+    hr_second: int | None = None
+    drift_pct: float | None = None  # decoupling: (speed/HR first half vs second half), + = HR rose at the same speed
 
 
 def block_stats(samples: list[Sample], blocks: list[dict]) -> list[BlockStat]:
@@ -83,13 +89,37 @@ def block_stats(samples: list[Sample], blocks: list[dict]) -> list[BlockStat]:
             continue
         ascent = sum(climb_rise_m(s.speed_kmh / 3.6, s.incline_pct) for s in win if s.incline_pct > 0)
         hrs = [s.hr for s in win if s.hr is not None]
+        drift = _drift(win)
         out.append(BlockStat(
             label=str(b.get("label") or "Block"), start_s=t0, dur_s=len(win),
             avg_speed_kmh=sum(s.speed_kmh for s in win) / len(win),
             avg_incline_pct=sum(s.incline_pct for s in win) / len(win),
             ascent_m=ascent, vam_m_h=ascent / (len(win) / 3600.0),
-            avg_hr=int(round(sum(hrs) / len(hrs))) if hrs else None))
+            avg_hr=int(round(sum(hrs) / len(hrs))) if hrs else None,
+            hr_first=drift[0] if drift else None, hr_second=drift[1] if drift else None,
+            drift_pct=drift[2] if drift else None))
     return out
+
+
+def _drift(win: list[Sample]):
+    """(hr_first, hr_second, decoupling %) for a long block run at constant speed and incline, else None."""
+    if len(win) < DRIFT_MIN_S:
+        return None
+    sp = [s.speed_kmh for s in win]
+    inc = [s.incline_pct for s in win]
+    if max(sp) - min(sp) > DRIFT_MAX_SPEED_SPREAD or max(inc) - min(inc) > DRIFT_MAX_INCLINE_SPREAD:
+        return None
+    half = len(win) // 2
+    halves = (win[:half], win[half:])
+    hr, spd = [], []
+    for h in halves:
+        vals = [s.hr for s in h if s.hr is not None]
+        if len(vals) < 0.8 * len(h):  # HR strap dropped out too often
+            return None
+        hr.append(sum(vals) / len(vals))
+        spd.append(sum(s.speed_kmh for s in h) / len(h))
+    ef1, ef2 = spd[0] / hr[0], spd[1] / hr[1]
+    return int(round(hr[0])), int(round(hr[1])), round((ef1 - ef2) / ef1 * 100.0, 1)
 
 
 def build_description(fb: Feedback, stats: list[BlockStat], duration_s: int, kcal: int | None) -> str:
@@ -104,6 +134,13 @@ def build_description(fb: Feedback, stats: list[BlockStat], duration_s: int, kca
             hr = f" · HR {b.avg_hr}" if b.avg_hr else ""
             lines.append(f"- {b.label} · {fmt_duration(b.dur_s)} · {b.avg_speed_kmh:.1f} km/h @ {b.avg_incline_pct:.0f}% "
                          f"-> {b.vam_m_h:.0f} m/h (+{b.ascent_m:.0f} m){hr}")
+        parts.append("\n".join(lines))
+    drifts = [b for b in stats if b.drift_pct is not None]
+    if drifts:
+        lines = ["HR drift (first vs second half, constant load)"]
+        for b in drifts:
+            lines.append(f"- {b.label} · {fmt_duration(b.dur_s)} · {b.avg_speed_kmh:.1f} km/h @ {b.avg_incline_pct:.0f}% "
+                         f"· HR {b.hr_first} -> {b.hr_second} · drift {b.drift_pct:+.1f}%")
         parts.append("\n".join(lines))
     facts = []
     if fb.carbs_total:
