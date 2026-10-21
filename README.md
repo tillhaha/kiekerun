@@ -121,3 +121,11 @@ For every constant-load block of 20+ minutes (speed spread <= 0.3 km/h, incline 
 the activity description gets a line `HR 140 -> 147 · drift +4.8%` (decoupling of speed/HR, first vs second half).
 Reading: under ~3 % threshold at or above this HR, ~3-5 % at it, over ~6 % below it. The average HR at the same load over
 repeated tests is the efficiency trend.
+
+## LT time trial
+
+Example workout "LT time trial" (15 min warm-up, 30 min even max effort at a fixed 10% incline split into "TT first 10 min"
+and "TT last 20 min", 10 min cool-down). Start at 10 km/h and adjust speed by feel; the incline stays fixed so tests compare.
+Run it rested, at least 72 h after the drift test. When the "TT last 20 min" block was run for at least 15 min with HR, the
+activity description gets a line `LT HR estimate 168 bpm` (average HR of that block). Together with the drift-test AeT this
+gives the Ten Percent Test: (LT - AeT) / LT.

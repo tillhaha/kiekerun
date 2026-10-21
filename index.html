@@ -345,6 +345,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
           <button id="ex1"><b>Threshold 4×8</b><span>1:02:00 · 9.1 km</span></button>
           <button id="ex2"><b>Power hike 3×12</b><span>1:03:00 · 5.4 km</span></button>
           <button id="ex4"><b>AeT drift test</b><span>45:00 · 3.9 km</span></button>
+          <button id="ex5"><b>LT time trial</b><span>55:00 · 7.5 km</span></button>
           <button id="ex3"><b>Control test + fuel</b><span>3:00 · 0.2 km</span></button>
         </div>
         <details class="paste" id="pastebox"><summary>Paste or edit JSON</summary>
@@ -435,6 +436,12 @@ const EX={
   {label:"Warm-up",duration:"10m",speed:5,incline:5},
   {label:"Drift test",duration:"30m",speed:5.5,incline:16},
   {label:"Cool-down",duration:"5m",speed:4,incline:2}]},
+ ex5:{name:"LT time trial",notes:"30 min even max effort at fixed 10% incline: chest strap, rested, at least 72 h after the drift test. Start at 10 km/h and adjust speed by feel, never the incline. First 3-5 min controlled. LT HR = average HR of the block 'TT last 20 min'.",blocks:[
+  {label:"Warm-up easy",duration:"10m",speed:6,incline:5},
+  {label:"Warm-up build",duration:"5m",speed:7.5,incline:8},
+  {label:"TT first 10 min",duration:"10m",speed:10,incline:10},
+  {label:"TT last 20 min",duration:"20m",speed:10,incline:10},
+  {label:"Cool-down",duration:"10m",speed:5,incline:3}]},
  ex3:{name:"Control test + fuel",notes:"Bluetooth control test: six 10 s steps inside one minute. Set heads-up to 3 s. Fuel reminders at 0:30 and 1:30.",fuel:[{at:"30s",kind:"gel",flask:0.5,note:"V4-Mix"},{at:"1m30",kind:"drink",flask:0.5,note:"V3-Mix"}],blocks:[{label:"Warm-up",duration:"1m",speed:3,incline:0},{label:"Step 1",duration:"10s",speed:4,incline:5},{label:"Step 2",duration:"10s",speed:5,incline:10},{label:"Step 3",duration:"10s",speed:6,incline:15},{label:"Step 4",duration:"10s",speed:5,incline:8},{label:"Step 5",duration:"10s",speed:4,incline:3},{label:"Step 6",duration:"10s",speed:3,incline:0},{label:"Cool-down",duration:"1m",speed:3,incline:0}]},
  ex2:{name:"Power hike 3x12",notes:"Long steep intervals at hiking pace",blocks:[
   {label:"Warm-up",duration:"10m",speed:6,incline:5},
@@ -477,7 +484,7 @@ function parse(){const box=$("issues"),sum=$("sum");box.innerHTML="";sum.innerHT
  renderPreview(B);renderFuelPv(dur);$("start").disabled=is.some(i=>i[0]==="error");
  $("readytxt").textContent=$("start").disabled?"Fix the errors above to start":is.length?"Ready, with "+is.length+" warning"+(is.length>1?"s":""):"All blocks within treadmill limits"}
 $("json").oninput=()=>{PLANNED=null;parse()};
-["ex1","ex2","ex3","ex4"].forEach(k=>$(k).onclick=()=>{PLANNED=null;$("json").value=JSON.stringify(EX[k],null,1);parse();document.querySelectorAll(".recent button").forEach(b=>b.classList.toggle("sel",b.id===k))});
+["ex1","ex2","ex3","ex4","ex5"].forEach(k=>$(k).onclick=()=>{PLANNED=null;$("json").value=JSON.stringify(EX[k],null,1);parse();document.querySelectorAll(".recent button").forEach(b=>b.classList.toggle("sel",b.id===k))});
 $("filebtn").onclick=()=>$("file").click();
 $("filebtn").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("file").click()}};
 function loadFile(f){if(!f)return;const r=new FileReader();r.onload=()=>{PLANNED=null;$("json").value=r.result;document.querySelectorAll(".recent button").forEach(b=>b.classList.remove("sel"));parse()};r.readAsText(f)}

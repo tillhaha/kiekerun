@@ -99,3 +99,17 @@ def test_no_drift_for_short_adjusted_or_hr_less_blocks():
 def test_negative_drift_when_hr_falls():
     s = hr_samples(1800, 5.5, 16, lambda i: 145 if i < 900 else 142)
     assert block_stats(s, [{"label": "x", "t0": 0, "dur": 1800}])[0].drift_pct < 0
+
+
+def test_lt_estimate_from_last_20_min_block():
+    s = hr_samples(1800, 10, 10, lambda i: 160 if i < 600 else 170)
+    blocks = [{"label": "TT first 10 min", "t0": 0, "dur": 600}, {"label": "TT last 20 min", "t0": 600, "dur": 1200}]
+    d = build_description(Feedback(), block_stats(s, blocks), 1800, None)
+    assert "LT time trial" in d and "LT HR estimate 170 bpm" in d and "LT HR estimate 160" not in d
+
+
+def test_no_lt_estimate_when_block_cut_short_or_no_hr():
+    short = block_stats(hr_samples(600, 10, 10, lambda i: 170), [{"label": "TT last 20 min", "t0": 0, "dur": 1200}])
+    assert "LT time trial" not in build_description(Feedback(note="n"), short, 600, None)
+    nohr = block_stats(hr_samples(1200, 10, 10, lambda i: None), [{"label": "TT last 20 min", "t0": 0, "dur": 1200}])
+    assert "LT time trial" not in build_description(Feedback(note="n"), nohr, 1200, None)

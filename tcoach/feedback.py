@@ -19,6 +19,8 @@ MAX_CARBS_ENTRY_G = 300
 DRIFT_MIN_S = 1200          # blocks of 20+ min get a first-half / second-half HR comparison
 DRIFT_MAX_SPEED_SPREAD = 0.3   # km/h; more than that and the load was not constant
 DRIFT_MAX_INCLINE_SPREAD = 1.0  # percentage points
+LT_BLOCK_LABEL = "tt last 20 min"  # LT time trial: avg HR of this block is the LT HR estimate
+LT_MIN_S = 900                 # at least 15 of the 20 min run, otherwise no estimate
 
 
 @dataclass
@@ -141,6 +143,13 @@ def build_description(fb: Feedback, stats: list[BlockStat], duration_s: int, kca
         for b in drifts:
             lines.append(f"- {b.label} · {fmt_duration(b.dur_s)} · {b.avg_speed_kmh:.1f} km/h @ {b.avg_incline_pct:.0f}% "
                          f"· HR {b.hr_first} -> {b.hr_second} · drift {b.drift_pct:+.1f}%")
+        parts.append("\n".join(lines))
+    lts = [b for b in stats if LT_BLOCK_LABEL in b.label.lower() and b.avg_hr and b.dur_s >= LT_MIN_S]
+    if lts:
+        lines = ["LT time trial"]
+        for b in lts:
+            lines.append(f"- {b.label} · {fmt_duration(b.dur_s)} · {b.avg_speed_kmh:.1f} km/h @ {b.avg_incline_pct:.0f}% "
+                         f"· LT HR estimate {b.avg_hr} bpm")
         parts.append("\n".join(lines))
     facts = []
     if fb.carbs_total:
