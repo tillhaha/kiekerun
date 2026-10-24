@@ -174,7 +174,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 @media (prefers-reduced-motion:reduce){.banner.now{animation:none}}
 .nextcard{background:var(--surface);border-radius:var(--r);padding:10px 18px;display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
 [data-theme="night"] .nextcard{background:transparent;border:1px solid var(--line)}
-.toprow.hasfuel{grid-template-columns:minmax(0,1fr) 250px 270px}
+.toprow.hasfuel{grid-template-columns:minmax(0,1fr) 270px 250px}
 .fuelcard{cursor:default;user-select:none}
 .fuelcard b{font-size:22px}
 .fuelcard.live{cursor:pointer;box-shadow:inset 5px 0 0 var(--highlight)}
@@ -200,10 +200,6 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .tile{background:var(--surface);border-radius:var(--r);padding:18px 20px;display:flex;flex-direction:column;min-width:0;min-height:0}
 [data-theme="night"] .tile{background:transparent;border-radius:0;border-top:1px solid var(--line);padding-left:0}
 [data-theme="night"] .tile+.tile{border-left:1px solid var(--line);padding-left:24px}
-.bname{margin-top:6px;min-height:34px}
-.bname span{font:700 clamp(22px,3.2vh,34px)/1.05 var(--fd);letter-spacing:.03em;text-transform:uppercase;font-style:var(--num-style);display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-[data-theme="volt"] .bname span{background:var(--highlight);color:var(--highlight-ink);padding:3px 10px 1px}
-[data-theme="night"] .bname span{color:var(--highlight)}
 .big{font:700 clamp(72px,19vh,170px)/.88 var(--fd);font-variant-numeric:tabular-nums;font-style:var(--num-style);letter-spacing:-.01em;margin:auto 0 14px}
 [data-theme="night"] .big{font-weight:600}
 .bar{height:8px;background:var(--surface-2);overflow:hidden;border-radius:0}
@@ -282,6 +278,8 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
   .app{height:auto;min-height:0}
   .top{grid-template-columns:1fr auto}.steps{grid-column:1/-1;grid-row:2;justify-content:center}
   .plan-grid,.sum-body,.bottom,.toprow{grid-template-columns:1fr}
+  .toprow.hasfuel{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr)}
+  .toprow.hasfuel .banner{padding:10px 14px;font-size:clamp(20px,3.2vw,30px)}
   .main{grid-template-columns:1fr}
   .stats,.bigstats{grid-template-columns:1fr 1fr}
   .run-screen,.plan-screen,.sum-screen{grid-template-rows:none}
@@ -376,13 +374,12 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
   <section id="run" class="screen run-screen" hidden>
     <div class="toprow">
       <div class="banner" id="banner">—</div>
-      <div class="nextcard"><span class="lbl">Next up</span><b id="nxl">—</b><span class="nv" id="nxv"></span></div>
       <div class="nextcard fuelcard" id="fuelcard" role="button" hidden><span class="lbl" id="fxt">Next fuel</span><b id="fxl">—</b><span class="nv" id="fxv"></span></div>
+      <div class="nextcard"><span class="lbl">Next up</span><b id="nxl">—</b><span class="nv" id="nxv"></span></div>
     </div>
     <div class="main">
       <div class="tile">
         <div class="lbl" id="blkno">Block</div>
-        <div class="bname"><span id="curlbl"></span></div>
         <div class="big" id="blockrem">0:00</div>
         <div class="bar" id="blkbar"><i id="ring"></i></div>
       </div>
@@ -707,7 +704,7 @@ function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){fi
   if(S.alerted!==i){S.alerted=i;beep(2,880);vib(200);say(`In ${Math.ceil(rem)} seconds, ${nb.speed} kilometres per hour, incline ${nb.incline} percent`)}
   if(rem<=3&&rem>0&&S.tk!==Math.ceil(rem)+"-"+i){S.tk=Math.ceil(rem)+"-"+i;beep(1,1000,.08)}}
  else{bn.className="banner";bn.textContent=b.label}
- $("curlbl").textContent=b.label;$("blockrem").textContent=fmt(rem);
+ $("blockrem").textContent=fmt(rem);
  const lv=BLE.cp&&BLE.on();const sv=lv&&BLE.live.speed!=null?BLE.live.speed:S.speed;$("vs").textContent=sv.toFixed(1);$("vp").textContent=pace(sv);$("vi").textContent=(lv&&BLE.live.incline!=null?BLE.live.incline:S.incline).toFixed(0);
  $("ps").textContent=`target ${S.speed.toFixed(1)}`;$("pp").textContent=`target ${pace(S.speed)}`;$("pi").textContent=`target ${S.incline.toFixed(0)}`;
  if(BLE.on()&&BLE.live.speed!=null){if(Math.abs(BLE.live.speed-S.speed)>0.3){S.mis=S.mis||Date.now();if(Date.now()-S.mis>8000&&!S.resent){S.resent=true;BLE.send(S.speed,S.incline)}}else{S.mis=0;S.resent=false}}
