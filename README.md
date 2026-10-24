@@ -21,10 +21,6 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 | `TRUSTED_PROXY_HOPS` | optional, default `1`: reverse proxies in front of the app (Coolify's Traefik = 1; Cloudflare in front of it = 2). Decides which `X-Forwarded-For` entry counts as the client address |
 | `RATE_FAILS`, `RATE_WINDOW_S`, `RATE_LOCKOUT_S` | optional, default 10 / 900 / 900: after 10 wrong logins or wrong connector tokens within 15 min an address is locked out for 15 min |
 | `MCP_RATE_PER_MIN` | optional, default `60`: valid connector requests per address per minute |
-| `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` | optional, enables "also upload to Strava" (see Strava below). Off without them |
-| `STRAVA_REDIRECT_URI` | optional, default `https://<your host>/api/strava/callback` (taken from the proxy headers) |
-| `STRAVA_TOKEN_FILE` | optional, default `/data/strava.json`: where the Strava tokens are kept. Add a Coolify persistent storage mounted at `/data`, otherwise a redeploy forgets the connection |
-| `STRAVA_REFRESH_TOKEN` | optional seed for the token store (only used while no token file exists) |
 | `MCP_ALLOW_WRITE` | optional, `1` lets the connector plan and delete calendar workouts. Default off: read-only, write tools are not even listed |
 
 ## API (HTTP Basic login)
@@ -33,11 +29,7 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 | `GET /api/health` | connection test: reaches intervals.icu with the configured key |
 | `GET /api/planned?date=YYYY-MM-DD` | planned workouts of a day as kiekerun JSON (default today) |
 | `POST /api/planned` `{workout, date}` | create/update a planned workout (matched by `external_id`) |
-| `POST /api/upload` `{log, paired_event_id?, strava?}` | runner log -> FIT (elevation, HR, calorie estimate) -> intervals.icu activity; then RPE, feel, carbs and a description (note + vertical speed per block) are set on it. With `strava: true` the same FIT goes to Strava afterwards (result in `strava` / `strava_error`; a Strava problem never fails the intervals.icu upload) |
-| `GET /api/strava/status` | `{configured, connected, athlete, persistent}` |
-| `GET /api/strava/connect` | starts the Strava OAuth consent (browser redirect) |
-| `GET /api/strava/callback` | Strava returns here; protected by a signed, single-use state instead of the login |
-| `POST /api/strava/disconnect` | forgets the stored tokens |
+| `POST /api/upload` `{log, paired_event_id?}` | runner log -> FIT (elevation, HR, calorie estimate) -> intervals.icu activity; then RPE, feel, carbs and a description (note + vertical speed per block) are set on it |
 
 Endpoints were checked against https://intervals.icu/api/v1/docs.
 
@@ -98,14 +90,6 @@ The page adds `feedback` and `blocks` to the runner log:
 intervals.icu fields: `icu_rpe`, `feel` (1 Strong ... 5 Weak, verify once in the UI), `carbs_ingested`, `description`, `calories`.
 Calories are estimated with the ACSM walking/running equations from speed, incline and body weight
 (`tcoach/calories.py`); vertical speed per block is computed from speed and incline, not measured by the treadmill.
-
-## Strava
-KiekeRun can upload each treadmill run to Strava as well (intervals.icu cannot push to Strava). One-time setup:
-1. https://www.strava.com/settings/api -> create an app. **Authorization Callback Domain** = the host of your KiekeRun URL (domain only, e.g. `run.example.com`). Website and description are free text.
-2. In Coolify set `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` (the secret never goes into the repo or the chat), add persistent storage mounted at `/data`, redeploy.
-3. Open `https://<your host>/api/strava/connect` while logged in, accept on Strava (keep "upload activities" ticked). Done; the summary screen now shows "also upload to Strava" (remembered per device).
-
-The same FIT is sent with `trainer=1` and an `external_id` (`kiekerun-<start>`), so Strava refuses a second copy; pressing upload again after an error is safe. The activity description (feedback note, block stats, HR drift) becomes the Strava description; visibility follows your Strava default privacy. A new Strava app is limited to one athlete (you), which is all this needs.
 
 ## Nutrition plan
 

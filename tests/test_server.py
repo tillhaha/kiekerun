@@ -251,35 +251,3 @@ def test_upload_rejects_bad_feedback(make2):
     c, _ = make2(_routes())
     assert c.post("/api/upload", json={"log": _log(feedback={"rpe": 11})}, headers=AUTH).status_code == 422
     assert c.post("/api/upload", json={"log": _log(blocks=[{"label": "x"}])}, headers=AUTH).status_code == 422
-
-
-def test_upload_to_strava_reuses_the_fit_and_never_fails_the_main_upload(make2, monkeypatch):
-    from tcoach.strava_client import StravaError
-    log = _log()
-    got = {}
-
-    class FakeStrava:
-        def upload_fit(self, fit, name=None, description=None, external_id=None):
-            got.update(name=name, ext=external_id, head=open(fit, "rb").read()[8:12])
-            return {"activity_id": 99, "status": "uploaded", "upload_id": 1}
-
-    c, _ = make2(_routes())
-    monkeypatch.setattr(appmod, "strava_client", lambda: FakeStrava())
-    r = c.post("/api/upload", json={"log": log, "strava": True}, headers=AUTH).json()
-    assert r["strava"]["activity_id"] == 99 and r["strava_error"] is None
-    assert got["ext"] == "kiekerun-20261020T120000" and got["head"] == b".FIT"
-
-    class Broken:
-        def upload_fit(self, *a, **k):
-            raise StravaError("Strava rate limit reached")
-
-    monkeypatch.setattr(appmod, "strava_client", lambda: Broken())
-    r = c.post("/api/upload", json={"log": log, "strava": True}, headers=AUTH).json()
-    assert r["ok"] and r["strava"] is None and "rate limit" in r["strava_error"]
-
-    monkeypatch.setattr(appmod, "strava_client", lambda: None)
-    r = c.post("/api/upload", json={"log": log, "strava": True}, headers=AUTH).json()
-    assert "not configured" in r["strava_error"]
-
-    r = c.post("/api/upload", json={"log": log}, headers=AUTH).json()  # flag off: Strava untouched
-    assert r["strava"] is None and r["strava_error"] is None

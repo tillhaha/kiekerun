@@ -142,12 +142,8 @@ Outdoor-Einheiten laufen ohne KiekeRun: Kalender, Garmin Connect, Uhr, und die A
 
 Mögliche nächste Schritte: OAuth statt geheimer URL für den Connector (Login, Token mit Ablauf, widerrufbar).
 
-## Strava
-
-intervals.icu kann nicht zu Strava pushen und ist von Strava getrennt. Laufband-Einheiten gehen deshalb direkt aus KiekeRun
-zu Strava: im Summary-Screen "also upload to Strava" (nur sichtbar, wenn verbunden). Dieselbe FIT-Datei, `trainer=1`,
-`external_id` gegen Doppelungen. Einrichtung (Strava-API-App, Env-Variablen, `/data`-Volume, Connect-Link) steht im README.
-Garmin-Läufe draußen laufen nicht über KiekeRun; ob Garmin Connect selbst zu Strava verbunden ist, wird dort geprüft.
+Strava: ein direkter Upload aus KiekeRun wurde gebaut und wieder entfernt, weil Strava für API-Apps ein Abo des App-Besitzers
+verlangt (403 `Application / Status / Inactive`). Laufband-Einheiten erreichen Strava vorerst nicht.
 
 ## Hinweise
 
