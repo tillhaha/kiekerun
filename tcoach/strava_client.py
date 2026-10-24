@@ -116,7 +116,7 @@ class StravaClient:
 
     def authorize_url(self, redirect_uri: str, state: str) -> str:
         q = {"client_id": self.client_id, "redirect_uri": redirect_uri, "response_type": "code",
-             "approval_prompt": "auto", "scope": f"read,{NEED_SCOPE}", "state": state}
+             "approval_prompt": "force", "scope": f"read,{NEED_SCOPE}", "state": state}
         return f"{AUTH_URL}?{urlencode(q)}"
 
     def _token_call(self, data: dict) -> dict:
@@ -130,8 +130,8 @@ class StravaClient:
 
     def exchange_code(self, code: str, scope: str = "") -> dict:
         """Code from the callback -> stored tokens. Refuses a grant without activity:write."""
-        if scope and NEED_SCOPE not in scope.split(","):
-            raise StravaError(f"Strava access was granted without '{NEED_SCOPE}'; connect again and keep the upload permission ticked")
+        if NEED_SCOPE not in scope.split(","):  # an unticked box or a missing scope parameter both end up here
+            raise StravaError(f"Strava access was granted without '{NEED_SCOPE}' (got '{scope or 'no scope'}'); connect again and keep the upload permission ticked")
         d = self._token_call({"code": code, "grant_type": "authorization_code"})
         ath = d.get("athlete") or {}
         name = " ".join(x for x in (ath.get("firstname"), ath.get("lastname")) if x)
@@ -154,7 +154,7 @@ class StravaClient:
 
     def status(self) -> dict:
         t = self.store.load()
-        return {"configured": True, "connected": bool(t.get("refresh_token")), "athlete": t.get("athlete"),
+        return {"configured": True, "connected": bool(t.get("refresh_token")), "athlete": t.get("athlete"), "scope": t.get("scope"),
                 "persistent": self.store.persistent}
 
     def disconnect(self) -> None:
@@ -169,7 +169,8 @@ class StravaClient:
         if r.status_code == 429:
             raise StravaError("Strava rate limit reached, try again in a few minutes", 429)
         if r.status_code in (401, 403):
-            raise StravaError(f"{method} {path} -> {r.status_code}: Strava rejected the token (revoked or missing activity:write); connect again", r.status_code)
+            raise StravaError(f"{method} {path} -> {r.status_code}: Strava rejected the request ({r.text[:300]}); granted scope: "
+                              f"'{self.store.load().get('scope') or 'unknown'}'. Connect again at /api/strava/connect", r.status_code)
         if r.status_code >= 400:
             raise StravaError(f"{method} {path} -> {r.status_code}: {r.text[:300]}", r.status_code)
         return r.json()

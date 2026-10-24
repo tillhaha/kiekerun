@@ -63,6 +63,8 @@ def test_exchange_stores_tokens_and_requires_write_scope(tmp_path):
     c2, _, _ = mk(tmp_path, Http())
     with pytest.raises(StravaError, match="activity:write"):
         c2.exchange_code("code", "read")
+    with pytest.raises(StravaError, match="no scope"):
+        c2.exchange_code("code", "")
 
 
 def test_access_token_cached_then_refreshed_with_rotation(tmp_path):
@@ -132,7 +134,7 @@ def test_upload_duplicate_and_error_and_timeout(tmp_path):
 
 def test_upload_http_errors(tmp_path):
     c, _, fit = _connected(tmp_path, [R(401, {})])
-    with pytest.raises(StravaError, match="connect again"):
+    with pytest.raises(StravaError, match="granted scope: 'activity:write'"):
         c.upload_fit(fit)
     c, _, fit = _connected(tmp_path, [R(429, {})])
     with pytest.raises(StravaError, match="rate limit"):
