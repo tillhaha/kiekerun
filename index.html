@@ -238,7 +238,6 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .sum-screen{grid-template-rows:auto auto auto minmax(0,1fr)}
 .sumhead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
 .sumhead .ptitle{font-size:clamp(36px,6vh,56px)}
-.badge{font:700 18px var(--fd);letter-spacing:.14em;text-transform:uppercase;background:var(--highlight);color:var(--highlight-ink);padding:8px 16px;border-radius:var(--r);font-style:var(--num-style)}
 .bigstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .bigstats .stat{padding:16px 20px}
 .bigstats .stat b{font-size:clamp(44px,10vh,88px);line-height:.92}
@@ -411,7 +410,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
 
   <!-- 3 · Summary -->
   <section id="done" class="screen sum-screen" hidden>
-    <div class="sumhead"><div><div class="lbl" id="ddate">Workout complete</div><h1 class="ptitle" id="dname">Workout</h1></div><div class="badge">Done</div></div>
+    <div class="sumhead"><div><div class="lbl" id="ddate">Workout complete</div><h1 class="ptitle" id="dname">Workout</h1></div></div>
     <div id="dsum" class="bigstats"></div>
     <div id="dsum2" class="substats"></div>
     <div class="sum-body">
