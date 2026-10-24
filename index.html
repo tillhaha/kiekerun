@@ -176,6 +176,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 [data-theme="night"] .nextcard{background:transparent;border:1px solid var(--line)}
 .toprow.hasfuel{grid-template-columns:minmax(0,1fr) 270px 250px}
 .fuelcard{cursor:default;user-select:none}
+.fuelcard[hidden]{display:none}
 .fuelcard b{font-size:22px}
 .fuelcard.live{cursor:pointer;box-shadow:inset 5px 0 0 var(--highlight)}
 .fuelcard.due{background:var(--alert);color:var(--alert-ink);border-color:transparent;cursor:pointer;animation:fpulse 1s steps(2,end) infinite}
