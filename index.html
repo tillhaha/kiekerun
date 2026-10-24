@@ -71,6 +71,8 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .steps span{font:600 13px var(--fd);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:7px 14px;border-radius:var(--radius-pill);border:1px solid var(--line)}
 [data-theme="volt"] .steps span{border-radius:var(--radius-sq)}
 .steps span.past{color:var(--ink)}
+.steps span.go{cursor:pointer}
+.steps span:not(.go):not(.on){opacity:.45}
 .steps span.on{background:var(--ink);color:var(--bg);border-color:transparent}
 [data-theme="night"] .steps span.on{background:var(--highlight);color:var(--highlight-ink)}
 .tools{display:flex;justify-content:flex-end;align-items:center;gap:8px}
@@ -627,7 +629,15 @@ $("todaybtn").onclick=async()=>{const b=$("todaybtn"),list=$("todaylist");b.disa
   else{planMsg("Several workouts on "+d.date+", pick one:");ok.forEach(it=>{const x=document.createElement("button"),n=document.createElement("b");n.textContent=it.name||"Workout";x.appendChild(n);x.onclick=()=>{useWorkout(it);x.classList.add("sel");planMsg("Loaded: "+it.name)};list.appendChild(x)})}
  }catch(e){planMsg("intervals.icu: "+e.message,true)}
  b.disabled=false};
-function show(n){SCREEN=n;renderSt();const o=["setup","run","done"],c=o.indexOf(n);o.forEach((k,x)=>{$(k).hidden=k!==n;$("st-"+k).className=x===c?"on":x<c?"past":""});window.scrollTo(0,0)}
+const HASH={setup:"#plan",run:"#run",done:"#summary"};
+/* A running workout owns the page (the plan must not change under it); otherwise Plan and the last Summary can be visited freely. */
+const canGo=n=>S?n==="run":n==="setup"||(n==="done"&&!!LAST_LOG);
+function renderSteps(){const o=["setup","run","done"],c=o.indexOf(SCREEN);o.forEach((k,x)=>{$("st-"+k).className=(x===c?"on":x<c?"past":"")+(x!==c&&canGo(k)?" go":"")})}
+function show(n,push=true){SCREEN=n;renderSt();["setup","run","done"].forEach(k=>$(k).hidden=k!==n);renderSteps();window.scrollTo(0,0);
+ if(push&&location.hash!==HASH[n])try{history.pushState(null,"",HASH[n])}catch(e){}}
+["setup","run","done"].forEach(k=>$("st-"+k).onclick=()=>{if(k!==SCREEN&&canGo(k))show(k)});
+function fromHash(){const n=Object.keys(HASH).find(k=>HASH[k]===location.hash)||"setup";show(canGo(n)?n:(S?"run":"setup"),false);if(location.hash!==HASH[SCREEN])try{history.replaceState(null,"",HASH[SCREEN])}catch(e){}}
+window.addEventListener("popstate",fromHash);
 const kpi=(l,v,c="")=>`<div class="kpi ${c}"><span class="lbl">${l}</span><b>${v}</b></div>`;
 function niceStep(t){return [15,30,60,120,300,600,900,1200,1800,3600].find(x=>t/x<=8)||3600}
 function stepPts(segs,tot,fy){let x=0,p=[];segs.forEach(g=>{const w=g.dur/tot*1000,y=fy(g).toFixed(1);p.push(x.toFixed(1)+","+y,(x+w).toFixed(1)+","+y);x+=w});return p.join(" ")}
@@ -738,7 +748,7 @@ function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);cle
  show("done");
  $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").textContent="";$("upmsg").style.color="";
  renderSummary(log,e,km);
- LAST_LOG=log;S=null;refreshLog();renderFB()}
+ LAST_LOG=log;S=null;refreshLog();renderFB();renderSteps()}
 $("again").onclick=()=>show("setup");
 $("up").onclick=async()=>{const t=$("logout").textContent;if(!t)return;const b=$("up"),m=$("upmsg");b.disabled=true;m.style.color="";m.textContent="Uploading…";
  try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED})});
@@ -750,6 +760,7 @@ const MOON="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z",SUN="M12 4V2M12 22v-2M4 12
 function setTheme(t){document.documentElement.dataset.theme=t;$("themeic").setAttribute("d",t==="night"?SUN:MOON);try{localStorage.setItem("tc_theme",t)}catch(e){}}
 $("themebtn").onclick=()=>setTheme(document.documentElement.dataset.theme==="night"?"volt":"night");
 setTheme(document.documentElement.dataset.theme==="night"?"night":"volt");
+fromHash();
 const tickClock=()=>{$("clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})};tickClock();setInterval(tickClock,1000);
 </script>
 </body>
