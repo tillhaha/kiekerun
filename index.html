@@ -419,6 +419,8 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <pre id="logout" hidden></pre>
         <div class="muted" id="fbsum"></div>
         <div class="muted" id="upmsg"></div>
+        <label class="chk" id="strava-row" hidden><input type="checkbox" id="strava-on"> also upload to Strava</label>
+        <div class="muted" id="strava-conn" hidden><a href="/api/strava/connect">Connect Strava</a> to upload runs there as well.</div>
         <div class="export"><button id="fbbtn2">Workout-Feedback</button><button class="pri" id="up">Upload to intervals.icu</button><button class="ghost" id="again">New</button></div>
       </div>
     </div>
@@ -737,14 +739,24 @@ function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);cle
  const km=S.events.reduce((a,ev,k)=>a+ev.speed*Math.max(0,((k+1<S.events.length?S.events[k+1].t:e)-ev.t))/3600,0);
  show("done");
  $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").textContent="";$("upmsg").style.color="";
+ stravaInit();
  renderSummary(log,e,km);
  LAST_LOG=log;S=null;refreshLog();renderFB()}
 $("again").onclick=()=>show("setup");
+let STRAVA_OK=false;
+async function stravaInit(){$("strava-row").hidden=true;$("strava-conn").hidden=true;STRAVA_OK=false;
+ try{const d=await API("/api/strava/status");if(!d.configured)return;
+  if(d.connected){STRAVA_OK=true;$("strava-row").hidden=false;let on=true;try{on=localStorage.getItem("tc_strava")!=="0"}catch(e){}$("strava-on").checked=on;$("up").textContent="Upload to intervals.icu + Strava"}
+  else $("strava-conn").hidden=false}catch(e){}}
+$("strava-on").onchange=()=>{try{localStorage.setItem("tc_strava",$("strava-on").checked?"1":"0")}catch(e){}$("up").textContent=$("strava-on").checked?"Upload to intervals.icu + Strava":"Upload to intervals.icu"};
 $("up").onclick=async()=>{const t=$("logout").textContent;if(!t)return;const b=$("up"),m=$("upmsg");b.disabled=true;m.style.color="";m.textContent="Uploading…";
- try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED})});
+ try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED,strava:STRAVA_OK&&$("strava-on").checked})});
   const a0=d.intervals&&d.intervals.activities&&d.intervals.activities[0],id=a0&&a0.id;
   if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded";if(d.calories)m.append(" · ~"+d.calories+" kcal (estimate)");if(d.update_error)m.append(" · Feedback fields not saved: "+d.update_error)}
   else{m.textContent="intervals.icu created no new activity (this session was probably uploaded already).";b.textContent="Already uploaded"}
+  if(d.strava){const sa=d.strava,done=sa.status!=="processing";m.append(" · Strava: "+(sa.status==="duplicate"?"already there":done?"uploaded":"processing at Strava"));
+   if(sa.activity_id){const a=document.createElement("a");a.href="https://www.strava.com/activities/"+sa.activity_id;a.target="_blank";a.rel="noopener";a.textContent="Open on Strava";m.append(" ");m.appendChild(a)}}
+  if(d.strava_error){m.append(" · Strava failed: "+d.strava_error);m.style.color="var(--alert-tint-ink)";b.disabled=false;b.textContent="Retry Strava"}
  }catch(e){m.textContent="Upload failed: "+e.message;m.style.color="var(--alert-tint-ink)";b.disabled=false}};
 const MOON="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z",SUN="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6L4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M16 12a4 4 0 11-8 0 4 4 0 018 0z";
 function setTheme(t){document.documentElement.dataset.theme=t;$("themeic").setAttribute("d",t==="night"?SUN:MOON);try{localStorage.setItem("tc_theme",t)}catch(e){}}

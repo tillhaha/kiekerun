@@ -9,6 +9,10 @@ Environment (set in Coolify, never in the repo or the page):
   RATE_FAILS / RATE_WINDOW_S / RATE_LOCKOUT_S   failed-login lockout (default 10 fails in 900 s -> 900 s lockout)
   MCP_ALLOW_WRITE                           1 lets the connector plan/delete calendar workouts (default: read-only)
   MCP_RATE_PER_MIN                          valid connector requests per IP per minute (default 60)
+  STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET    Strava API app; enables "also upload to Strava" (off without them)
+  STRAVA_REDIRECT_URI                       optional, default https://<host>/api/strava/callback
+  STRAVA_TOKEN_FILE                         default /data/strava.json (mount a persistent volume on /data)
+  STRAVA_REFRESH_TOKEN                      optional seed when no token file exists yet
 
 The API fails closed: without KIEKERUN_USER/KIEKERUN_PASSWORD every /api route
 answers 503, so nobody can write to the calendar through a public URL.
@@ -23,7 +27,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
@@ -37,6 +41,7 @@ from tcoach.intervals_text import parse_intervals_text
 from tcoach.machine import has_errors, validate
 from tcoach.models import Workout
 from tcoach.session import samples_from_log
+from tcoach.strava_client import StravaClient, StravaError
 
 ROOT = Path(__file__).resolve().parent.parent
 basic = HTTPBasic(auto_error=False)
@@ -191,6 +196,7 @@ def plan(body: PlanIn):
 class UploadIn(BaseModel):
     log: dict
     paired_event_id: int | None = None
+    strava: bool = False
 
 
 def body_weight_kg(cl: IntervalsClient) -> float | None:
@@ -229,13 +235,23 @@ def upload(body: UploadIn):
     kcal = estimate_kcal(samples, weight) if weight else None
     description = build_description(fb, stats, len(samples), kcal)
 
+    ext_id = f"kiekerun-{start.astimezone(timezone.utc):%Y%m%dT%H%M%S}"
+    strava, strava_error = None, None
     with tempfile.TemporaryDirectory() as tmp:
         fit = Path(tmp) / "kiekerun.fit"
         tot = write_fit(samples, fit, start=start, calories=kcal)
         res = _intervals_call(
             cl.upload_activity, fit, name=log.get("name"),
-            external_id=f"kiekerun-{start.astimezone(timezone.utc):%Y%m%dT%H%M%S}",
-            paired_event_id=body.paired_event_id, device_name="KiekeRun")
+            external_id=ext_id, paired_event_id=body.paired_event_id, device_name="KiekeRun")
+        if body.strava:  # after intervals.icu, so a Strava problem never loses the main upload
+            sc = strava_client()
+            if sc is None:
+                strava_error = "Strava is not configured on the server"
+            else:
+                try:
+                    strava = sc.upload_fit(fit, name=log.get("name"), description=description or None, external_id=ext_id)
+                except StravaError as exc:
+                    strava_error = str(exc)
 
     fields = {}
     if fb.rpe:
@@ -254,7 +270,83 @@ def upload(body: UploadIn):
         except IntervalsError as exc:  # the upload itself succeeded, so report instead of failing
             update_error = str(exc)
     return {"ok": True, "totals": tot, "calories": kcal, "updated": sorted(fields), "update_error": update_error,
-            "intervals": res}
+            "intervals": res, "strava": strava, "strava_error": strava_error}
+
+
+# ---------------------------------------------------------------- strava
+def strava_client() -> StravaClient | None:
+    return StravaClient.from_env()
+
+
+def _strava_secret() -> str:
+    """Key for the signed OAuth state: only someone who knows the Strava secret and the login can mint one."""
+    return os.environ.get("STRAVA_CLIENT_SECRET", "") + "|" + os.environ.get("KIEKERUN_PASSWORD", "")
+
+
+def _redirect_uri(request: Request) -> str:
+    fixed = os.environ.get("STRAVA_REDIRECT_URI", "").strip()
+    if fixed:
+        return fixed
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "localhost"
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    return f"{proto}://{host}/api/strava/callback"
+
+
+_USED_STATES: set[str] = set()
+
+
+def _page(title: str, text: str, status: int = 200) -> HTMLResponse:
+    return HTMLResponse(f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                        f"<title>{title}</title><body style='font:18px system-ui;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
+                        f"<h1>{title}</h1><p>{text}</p><p><a href='/'>Back to KiekeRun</a></p>", status_code=status)
+
+
+@app.get("/api/strava/status", dependencies=[Depends(require_login)])
+def strava_status():
+    sc = strava_client()
+    return sc.status() if sc else {"configured": False, "connected": False}
+
+
+@app.get("/api/strava/connect", dependencies=[Depends(require_login)])
+def strava_connect(request: Request):
+    """Start OAuth: sends the browser to Strava's consent page."""
+    sc = strava_client()
+    if sc is None:
+        raise HTTPException(503, "Strava is not configured: set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET")
+    return RedirectResponse(sc.authorize_url(_redirect_uri(request), sc.sign_state(_strava_secret())))
+
+
+@app.get("/api/strava/callback")
+def strava_callback(request: Request, code: str = "", state: str = "", scope: str = "", error: str = ""):
+    """Strava redirects here. No Basic login (the browser may not resend it across the redirect); the signed,
+    single-use, 10-minute state proves the flow was started from the logged-in /api/strava/connect."""
+    user, pw = _creds()
+    sc = strava_client()
+    if not (user and pw) or sc is None:
+        raise HTTPException(503, "Strava is not configured")
+    ip = client_ip(request)
+    wait = FAILS.retry_after(ip)
+    if wait:
+        raise _too_many(wait)
+    if state in _USED_STATES or not sc.check_state(state, _strava_secret()):
+        FAILS.fail(ip)
+        return _page("Strava connection failed", "The link is invalid or expired. Start again from KiekeRun.", 400)
+    _USED_STATES.add(state)
+    if error or not code:
+        return _page("Strava not connected", f"Strava reported: {error or 'no code'}.", 400)
+    try:
+        sc.exchange_code(code, scope)
+    except StravaError as exc:
+        return _page("Strava connection failed", str(exc).replace("<", "&lt;"), 502)
+    return _page("Strava connected", "KiekeRun can now upload your treadmill runs to Strava.")
+
+
+@app.post("/api/strava/disconnect", dependencies=[Depends(require_login)])
+def strava_disconnect():
+    sc = strava_client()
+    if sc:
+        sc.disconnect()
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------- coach connector (MCP, read-only)

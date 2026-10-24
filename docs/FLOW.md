@@ -140,8 +140,14 @@ Outdoor-Einheiten laufen ohne KiekeRun: Kalender, Garmin Connect, Uhr, und die A
 | intervals.icu | API-Key nur in Coolify (`INTERVALS_API_KEY`, `INTERVALS_ATHLETE_ID`), nie im Chat |
 | Client-Adresse | aus `X-Forwarded-For`, `TRUSTED_PROXY_HOPS` (Standard 1) |
 
-Mögliche nächste Schritte: OAuth statt geheimer URL für den Connector (Login, Token mit Ablauf, widerrufbar),
-Strava-Upload der Laufband-Einheiten direkt aus KiekeRun.
+Mögliche nächste Schritte: OAuth statt geheimer URL für den Connector (Login, Token mit Ablauf, widerrufbar).
+
+## Strava
+
+intervals.icu kann nicht zu Strava pushen und ist von Strava getrennt. Laufband-Einheiten gehen deshalb direkt aus KiekeRun
+zu Strava: im Summary-Screen "also upload to Strava" (nur sichtbar, wenn verbunden). Dieselbe FIT-Datei, `trainer=1`,
+`external_id` gegen Doppelungen. Einrichtung (Strava-API-App, Env-Variablen, `/data`-Volume, Connect-Link) steht im README.
+Garmin-Läufe draußen laufen nicht über KiekeRun; ob Garmin Connect selbst zu Strava verbunden ist, wird dort geprüft.
 
 ## Hinweise
 
