@@ -2,8 +2,9 @@
 
 Read tools:  get_activities, get_activity, get_wellness, get_plan_vs_actual.
 Write tools (only when MCP_ALLOW_WRITE=1): save_treadmill_workout, save_planned_workout,
-delete_planned_workout. They only touch planned WORKOUT entries in the calendar; they cannot
-change activities, wellness data, races or notes, and delete only works on entries this app created.
+save_note, delete_planned_workout. They only touch planned WORKOUT entries and NOTE markers
+in the calendar; they cannot change activities, wellness data or races, and delete only works
+on entries this app created.
 
 Auth is a secret in the URL path (env MCP_TOKEN), because claude.ai's custom connectors take a URL
 and cannot send our Basic-Auth login. Anyone with the URL can read your training data (and plan
@@ -107,6 +108,14 @@ WRITE_TOOLS = [
          "load": {"type": "number", "minimum": 0, "maximum": 1000, "description": "Planned training load"},
          "carbs_per_h": {"type": "number", "minimum": 0, "maximum": 200, "description": "Planned carbs in g per hour"}}},
      "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}},
+    {"name": "save_note",
+     "description": "Add a plain NOTE to the intervals.icu calendar: title + description, no duration, no load, "
+                    "no compliance math. Use this for rest days, reminders, race-week markers or anything that is "
+                    "not a workout. Saving the same name on the same day updates it in place.",
+     "inputSchema": {"type": "object", "required": ["date", "name"], "properties": {
+         "date": _DATE, "name": {"type": "string", "maxLength": 120},
+         "description": {"type": "string", "maxLength": 5000}}},
+     "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}},
     {"name": "delete_planned_workout",
      "description": "Delete a planned workout that was created through this connector or KiekeRun (not races, notes or other calendar "
                     "entries) and that is today or later. Use event_id from get_plan_vs_actual or a save result.",
@@ -197,6 +206,19 @@ def _write(name: str, args: dict, cl: IntervalsClient, today: str) -> dict:
             out["warning"] = ("these steps have a zone but no target type; intervals.icu sends them to Garmin as power targets "
                               "(watt alarms). Add 'Pace' or 'HR' and save again: " + " | ".join(bare[:5]))
         return _text(out)
+    if name == "save_note":
+        day = _check_date(args.get("date"), today)
+        title = str(args.get("name") or "").strip()
+        if not title or len(title) > 120:
+            raise ValueError("name is required (max 120 characters)")
+        desc = args.get("description") or ""
+        if not isinstance(desc, str) or len(desc) > 5000:
+            raise ValueError("description must be text of at most 5000 characters")
+        ev = {"category": "NOTE", "start_date_local": f"{day}T00:00:00", "name": title,
+              "description": desc, "external_id": f"coach-note-{day}-{slug(title)}"}
+        res = cl.upsert_event(ev)
+        return _text({"saved": True, "updated_existing": bool(res.get("_updated")), "event_id": res.get("id"),
+                      "date": day, "name": title})
     if name == "delete_planned_workout":
         eid = args.get("event_id")
         if isinstance(eid, bool) or not isinstance(eid, int) or eid <= 0:
@@ -282,7 +304,7 @@ def handle(msg, get_client: Callable[[], IntervalsClient], today: Callable[[], s
                          "serverInfo": {"name": "kiekerun-coach", "version": "1.0"},
                          "instructions": "Tito's intervals.icu data: activities from all sources, wellness/fitness, planned "
                                          "workouts. Dates are local, YYYY-MM-DD."
-                                         + (" Calendar writes are enabled for planned workouts." if allow_write else " Read-only.")})
+                                         + (" Calendar writes are enabled for planned workouts and notes." if allow_write else " Read-only.")})
     if method == "ping":
         return _ok(id_, {})
     if method == "tools/list":

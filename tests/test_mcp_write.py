@@ -82,14 +82,17 @@ def test_write_tools_hidden_and_refused_by_default(mk):
     assert all(t["annotations"] == {"readOnlyHint": True} for t in tools)
     r = call(c, "save_planned_workout", {"date": "2026-10-17", "name": "x"})
     assert r["isError"] and "disabled" in r["data"] and not [x for x in cal.calls if x[0] != "GET"]
+    r = call(c, "save_note", {"date": "2026-10-17", "name": "x"})
+    assert r["isError"] and "disabled" in r["data"] and not [x for x in cal.calls if x[0] != "GET"]
 
 
 def test_write_tools_listed_with_annotations_when_enabled(mk):
     c, _ = mk()
     tools = {t["name"]: t for t in c.post(f"/mcp/{TOKEN}", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()["result"]["tools"]}
-    assert set(tools) >= {"save_treadmill_workout", "save_planned_workout", "delete_planned_workout"}
+    assert set(tools) >= {"save_treadmill_workout", "save_planned_workout", "save_note", "delete_planned_workout"}
     assert tools["delete_planned_workout"]["annotations"]["destructiveHint"] is True
     assert tools["save_planned_workout"]["annotations"]["readOnlyHint"] is False
+    assert tools["save_note"]["annotations"] == {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}
 
 
 def test_save_treadmill_workout_creates_then_updates(mk):
@@ -136,6 +139,36 @@ def test_save_planned_workout_idempotent_and_fields(mk):
 def test_save_planned_workout_validation(mk, args):
     c, cal = mk()
     assert call(c, "save_planned_workout", args)["isError"]
+    assert not cal.events
+
+
+def test_save_note_creates_then_updates(mk):
+    c, cal = mk()
+    r = call(c, "save_note", {"date": "2026-10-20", "name": "Rest Day", "description": "Walk 20 min + Mobility"})
+    assert not r["isError"] and r["data"]["saved"] and r["data"]["updated_existing"] is False
+    ev = cal.events[r["data"]["event_id"]]
+    assert ev["category"] == "NOTE" and ev["name"] == "Rest Day"
+    assert ev["description"] == "Walk 20 min + Mobility"
+    assert ev["external_id"] == "coach-note-2026-10-20-rest-day"
+    assert ev["start_date_local"] == "2026-10-20T00:00:00"
+    # NOTE must not carry workout-only fields
+    assert "moving_time" not in ev and "icu_training_load" not in ev and "type" not in ev
+    # Re-save with same name on same day updates in place
+    r2 = call(c, "save_note", {"date": "2026-10-20", "name": "Rest Day", "description": "Updated: full rest"})
+    assert r2["data"]["updated_existing"] is True and r2["data"]["event_id"] == r["data"]["event_id"]
+    assert len(cal.events) == 1
+    assert cal.events[r["data"]["event_id"]]["description"] == "Updated: full rest"
+
+
+@pytest.mark.parametrize("args", [
+    {"date": "2026-10-14", "name": "x"}, {"date": "2028-01-01", "name": "x"}, {"date": "17.10.2026", "name": "x"},
+    {"date": "2026-10-17", "name": ""}, {"date": "2026-10-17", "name": "x" * 121},
+    {"date": "2026-10-17", "name": "x", "description": "y" * 5001},
+    {"date": "2026-10-17", "name": "x", "description": 123},
+])
+def test_save_note_validation(mk, args):
+    c, cal = mk()
+    assert call(c, "save_note", args)["isError"]
     assert not cal.events
 
 
