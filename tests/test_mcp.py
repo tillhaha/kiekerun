@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from server import app as appmod
-from tcoach.coach_data import plan_vs_actual, resolve_range, summarize_activity, summarize_wellness
+from tcoach.coach_data import plan_vs_actual, resolve_range, summarize_activity, summarize_season, summarize_wellness
 from tcoach.intervals_client import IntervalsClient
 
 TOKEN = "t" * 24
@@ -71,7 +71,7 @@ def test_initialize_list_ping_and_notification(mk):
     assert r["protocolVersion"] == "2025-03-26" and r["capabilities"] == {"tools": {}}
     assert rpc(c, "initialize", {"protocolVersion": "1999"}).json()["result"]["protocolVersion"] == "2025-06-18"
     names = [t["name"] for t in rpc(c, "tools/list").json()["result"]["tools"]]
-    assert names == ["get_activities", "get_activity", "get_wellness", "get_zones", "get_planned_workout", "get_plan_vs_actual"]
+    assert names == ["get_activities", "get_activity", "get_wellness", "get_zones", "get_planned_workout", "get_season_plan", "get_plan_vs_actual"]
     assert rpc(c, "ping").json()["result"] == {}
     assert rpc(c, "notifications/initialized", id_=None).status_code == 202
     assert rpc(c, "nope").json()["error"]["code"] == -32601
@@ -170,3 +170,48 @@ def test_zones_and_planned_workout_tools():
     assert w["has_structure"] and w["steps"][0]["hr"]["value"] == 1
     with pytest.raises(mcp.ToolError):
         mcp.call_tool("get_planned_workout", {"event_id": "x"}, CL(), "2026-10-19")
+
+
+SEASON = [
+    {"id": 1, "category": "SEASON_START", "name": "UTMB", "start_date_local": "2026-11-23T00:00:00"},
+    {"id": 2, "category": "PLAN", "name": "UTMB", "start_date_local": "2026-11-23T00:00:00", "description": "Base Phase: Aerobe Kapazit\u00e4t"},
+    {"id": 3, "category": "TARGET", "name": "Weekly", "type": "Run", "start_date_local": "2026-11-23T00:00:00",
+     "load_target": 300, "time_target": 18000, "distance_target": 50000},
+    {"id": 4, "category": "TARGET", "name": "Weekly", "type": "Run", "start_date_local": "2026-11-30T00:00:00"},
+    {"id": 5, "category": "NOTE", "name": "Erholungswoche", "start_date_local": "2026-11-30T00:00:00"},
+    {"id": 6, "category": "PLAN", "name": "UTMB", "start_date_local": "2027-04-12T00:00:00", "description": "Build Phase: Schwelle"},
+    {"id": 7, "category": "RACE_A", "name": "UTMB", "start_date_local": "2027-08-27T00:00:00", "distance": 170000, "moving_time": 100800},
+]
+
+
+def test_season_summary_phases_weeks_races():
+    out = summarize_season(SEASON, "2026-10-25")
+    assert out["season_start"]["date"] == "2026-11-23"
+    assert [(p["description"].split(":")[0], p["start"], p["end"]) for p in out["phases"]] == [
+        ("Base Phase", "2026-11-23", "2027-04-11"), ("Build Phase", "2027-04-12", "2027-08-27")]
+    w0, w1 = out["weeks"]
+    assert (w0["week_no"], w0["phase"], w0["target_load"], w0["target_hours"], w0["target_km"]) == (1, "Base Phase", 300, 5.0, 50.0)
+    assert w0["weeks_to_race"] == 39 and "recovery_week" not in w0
+    assert w1["recovery_week"] is True and "target_load" not in w1
+    assert out["races"][0]["planned_km"] == 170.0 and out["races"][0]["planned_h"] == 28.0
+    assert out["weeks_with_targets"] == 1 and "sample_target_fields" not in out
+
+
+def test_season_summary_reports_fields_when_targets_are_empty():
+    out = summarize_season([e for e in SEASON if e["id"] != 3], "2026-10-25")
+    assert out["weeks_with_targets"] == 0 and out["note"]
+    assert out["sample_target_fields"]["category"] == "TARGET"
+    assert summarize_season([], "2026-10-25")["weeks"] == []
+
+
+def test_plan_vs_actual_passes_week_targets():
+    row = plan_vs_actual([SEASON[2]], [], "2026-10-25")[0]["planned"][0]
+    assert row["target_load"] == 300 and row["target_hours"] == 5.0 and row["target_km"] == 50.0
+
+
+def test_get_season_plan_tool_filters_and_defaults(mk):
+    c, http = mk({"/events": Resp(200, SEASON + [{"id": 99, "category": "WORKOUT", "name": "x", "start_date_local": "2026-10-20T00:00:00"}])})
+    out = json.loads(rpc(c, "tools/call", {"name": "get_season_plan", "arguments": {}}).json()["result"]["content"][0]["text"])
+    assert out["oldest"] == "2026-08-17" and out["newest"] == "2027-09-11"
+    assert len(out["weeks"]) == 2 and len(out["phases"]) == 2
+    assert http.calls[0][2]["oldest"] == "2026-08-17"
