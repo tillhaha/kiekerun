@@ -2,9 +2,9 @@
 
 Read tools:  get_activities, get_activity, get_wellness, get_plan_vs_actual.
 Write tools (only when MCP_ALLOW_WRITE=1): save_treadmill_workout, save_planned_workout,
-save_note, delete_planned_workout. They only touch planned WORKOUT entries and NOTE markers
-in the calendar; they cannot change activities, wellness data or races, and delete only works
-on entries this app created.
+save_note, delete_planned_workout, delete_note. They only touch planned WORKOUT entries and
+NOTE markers in the calendar; they cannot change activities, wellness data or races, and
+delete only works on entries this app created.
 
 Auth is a secret in the URL path (env MCP_TOKEN), because claude.ai's custom connectors take a URL
 and cannot send our Basic-Auth login. Anyone with the URL can read your training data (and plan
@@ -68,6 +68,7 @@ for _t in TOOLS:
 WORKOUT_TYPES = ("Run", "TrailRun", "VirtualRun", "Walk", "Hike", "Ride", "VirtualRide", "Swim", "WeightTraining",
                  "Workout", "Yoga", "Other")
 OWN_PREFIXES = ("tcoach-", "coach-")  # delete_planned_workout only touches entries created here
+OWN_NOTE_PREFIX = "coach-note-"  # delete_note only touches notes created here
 MAX_AHEAD_DAYS = 400
 WRITE_RATE = RateLimiter(limit=30, window_s=3600)  # all writes together, per hour
 
@@ -119,6 +120,11 @@ WRITE_TOOLS = [
     {"name": "delete_planned_workout",
      "description": "Delete a planned workout that was created through this connector or KiekeRun (not races, notes or other calendar "
                     "entries) and that is today or later. Use event_id from get_plan_vs_actual or a save result.",
+     "inputSchema": {"type": "object", "required": ["event_id"], "properties": {"event_id": {"type": "integer"}}},
+     "annotations": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True}},
+    {"name": "delete_note",
+     "description": "Delete a calendar NOTE that was created through this connector (save_note) and that is today or later. "
+                    "Use event_id from get_plan_vs_actual or a save result.",
      "inputSchema": {"type": "object", "required": ["event_id"], "properties": {"event_id": {"type": "integer"}}},
      "annotations": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True}},
 ]
@@ -229,6 +235,18 @@ def _write(name: str, args: dict, cl: IntervalsClient, today: str) -> dict:
             raise ValueError("only workouts created through this connector or KiekeRun can be deleted")
         if (ev.get("start_date_local") or "")[:10] < today:
             raise ValueError("past workouts are not deleted")
+        cl.delete_event(eid)
+        return _text({"deleted": True, "event_id": eid, "name": ev.get("name"), "date": (ev.get("start_date_local") or "")[:10]})
+    if name == "delete_note":
+        eid = args.get("event_id")
+        if isinstance(eid, bool) or not isinstance(eid, int) or eid <= 0:
+            raise ValueError("event_id must be a positive integer")
+        ev = cl.get_event(eid)
+        ext = str(ev.get("external_id") or "")
+        if ev.get("category") != "NOTE" or not ext.startswith(OWN_NOTE_PREFIX):
+            raise ValueError("only notes created through this connector can be deleted")
+        if (ev.get("start_date_local") or "")[:10] < today:
+            raise ValueError("past notes are not deleted")
         cl.delete_event(eid)
         return _text({"deleted": True, "event_id": eid, "name": ev.get("name"), "date": (ev.get("start_date_local") or "")[:10]})
     raise ToolError(f"unknown tool: {name}")

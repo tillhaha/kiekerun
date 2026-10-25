@@ -89,8 +89,10 @@ def test_write_tools_hidden_and_refused_by_default(mk):
 def test_write_tools_listed_with_annotations_when_enabled(mk):
     c, _ = mk()
     tools = {t["name"]: t for t in c.post(f"/mcp/{TOKEN}", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()["result"]["tools"]}
-    assert set(tools) >= {"save_treadmill_workout", "save_planned_workout", "save_note", "delete_planned_workout"}
+    assert set(tools) >= {"save_treadmill_workout", "save_planned_workout", "save_note",
+                           "delete_planned_workout", "delete_note"}
     assert tools["delete_planned_workout"]["annotations"]["destructiveHint"] is True
+    assert tools["delete_note"]["annotations"]["destructiveHint"] is True
     assert tools["save_planned_workout"]["annotations"]["readOnlyHint"] is False
     assert tools["save_note"]["annotations"] == {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}
 
@@ -188,6 +190,37 @@ def test_delete_only_own_future_workouts(mk):
     assert set(cal.events) == {3, 4, 5}
     for bad in ("1", True, -1, None):
         assert call(c, "delete_planned_workout", {"event_id": bad})["isError"]
+
+
+def test_delete_only_own_future_notes(mk):
+    events = [
+        {"id": 1, "category": "NOTE", "external_id": "coach-note-2026-10-20-rest", "name": "mine",
+         "start_date_local": "2026-10-20T00:00:00"},
+        {"id": 2, "category": "NOTE", "external_id": "coach-2026-10-21-x", "name": "workout-prefix",
+         "start_date_local": "2026-10-21T00:00:00"},  # NOTE but non-note prefix (workout tool prefix)
+        {"id": 3, "category": "NOTE", "external_id": None, "name": "manual-ui",
+         "start_date_local": "2026-10-22T00:00:00"},
+        {"id": 4, "category": "WORKOUT", "external_id": "coach-note-2026-10-23-x", "name": "wrong-category",
+         "start_date_local": "2026-10-23T00:00:00"},
+        {"id": 5, "category": "NOTE", "external_id": "coach-note-2026-10-10-old", "name": "past",
+         "start_date_local": "2026-10-10T00:00:00"},
+    ]
+    c, cal = mk(events)
+    assert call(c, "delete_note", {"event_id": 1})["data"]["deleted"] is True
+    for eid in (2, 3, 4, 5, 99):
+        assert call(c, "delete_note", {"event_id": eid})["isError"], eid
+    assert set(cal.events) == {2, 3, 4, 5}
+    for bad in ("1", True, -1, None):
+        assert call(c, "delete_note", {"event_id": bad})["isError"]
+
+
+def test_delete_note_refuses_workout_entries(mk):
+    events = [{"id": 10, "category": "WORKOUT", "external_id": "coach-2026-10-20-run", "name": "run",
+               "start_date_local": "2026-10-20T00:00:00"}]
+    c, cal = mk(events)
+    r = call(c, "delete_note", {"event_id": 10})
+    assert r["isError"] and "note" in r["data"].lower()
+    assert set(cal.events) == {10}
 
 
 def test_write_rate_cap(mk, monkeypatch):
