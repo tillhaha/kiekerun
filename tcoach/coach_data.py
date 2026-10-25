@@ -132,6 +132,17 @@ def summarize_wellness(w: dict) -> dict:
     })
 
 
+def event_targets(e: dict) -> dict:
+    """Weekly/phase targets of TARGET / PLAN events (empty values are dropped by _clean)."""
+    end = (e.get("end_date_local") or "")[:10]
+    return _clean({
+        "target_load": e.get("load_target"),
+        "target_hours": _r(e["time_target"] / 3600.0, 2) if isinstance(e.get("time_target"), (int, float)) and e.get("time_target") else None,
+        "target_km": _r(e["distance_target"] / 1000.0, 1) if isinstance(e.get("distance_target"), (int, float)) and e.get("distance_target") else None,
+        "end_date": end or None,
+    })
+
+
 def plan_vs_actual(events: list[dict], activities: list[dict], today: str) -> list[dict]:
     """One row per day: what was planned and what was done. 'paired' means intervals.icu
     linked the activity to the planned event; an unpaired activity on the same day may
@@ -159,6 +170,7 @@ def plan_vs_actual(events: list[dict], activities: list[dict], today: str) -> li
             "planned_min": _r(e["moving_time"] / 60.0) if e.get("moving_time") else None,
             "planned_km": _r(e["distance"] / 1000.0, 1) if e.get("distance") else None,
             "planned_load": e.get("icu_training_load"),
+            **event_targets(e),
             "description": desc[:MAX_DESC] + ("..." if len(desc) > MAX_DESC else "") or None,
         })
         if e.get("category") == "WORKOUT":
@@ -171,6 +183,75 @@ def plan_vs_actual(events: list[dict], activities: list[dict], today: str) -> li
                 row["status"] = "no paired activity"
         day(d)["planned"].append(row)
     return [_clean(days[k]) | {"date": k} for k in sorted(days)]
+
+
+SEASON_CATEGORIES = ("SEASON_START", "PLAN", "TARGET", "RACE_A", "RACE_B", "RACE_C", "NOTE")
+RECOVERY_WORDS = ("erholung", "recovery", "deload", "entlastung")
+_SAMPLE_SKIP = {"description", "name", "id", "uid", "athlete_id", "icu_training_load", "calendar_id"}
+
+
+def _d(e: dict) -> str:
+    return (e.get("start_date_local") or "")[:10]
+
+
+def summarize_season(events: list[dict], today: str) -> dict:
+    """Annual training plan from calendar events: season start, phases (PLAN), weekly targets (TARGET),
+    recovery weeks (NOTE with 'Erholungswoche' etc. inside the week) and races (RACE_A/B/C).
+    Phases run from their start to the day before the next phase (or the A race / last week)."""
+    evs = sorted((e for e in events if _d(e)), key=lambda e: (_d(e), e.get("id") or 0))
+    start = next((e for e in evs if e.get("category") == "SEASON_START"), None)
+    races = [e for e in evs if str(e.get("category", "")).startswith("RACE_")]
+    targets = [e for e in evs if e.get("category") == "TARGET"]
+    notes = [e for e in evs if e.get("category") == "NOTE"]
+    plans = [e for e in evs if e.get("category") == "PLAN"]
+
+    a_race = next((r for r in reversed(races) if r.get("category") == "RACE_A"), None)
+    season_end = _d(a_race) if a_race else (_d(targets[-1]) if targets else None)
+
+    phases = []
+    for i, p in enumerate(plans):
+        nxt = _d(plans[i + 1]) if i + 1 < len(plans) else None
+        end = p.get("end_date_local") and _d({"start_date_local": p["end_date_local"]})
+        if not end:
+            end = (parse_day(nxt, "d") - timedelta(days=1)).isoformat() if nxt else season_end
+        phases.append(_clean({"event_id": p.get("id"), "name": p.get("name"), "start": _d(p), "end": end,
+                              "description": (p.get("description") or "").strip() or None, **event_targets(p)}))
+
+    def phase_of(day: str):
+        cur = None
+        for ph in phases:
+            if ph["start"] <= day:
+                cur = ph
+        return cur["description"].split(":")[0] if cur and cur.get("description") else (cur or {}).get("name")
+
+    weeks = []
+    for t in targets:
+        day = _d(t)
+        wk_end = (parse_day(day, "d") + timedelta(days=6)).isoformat()
+        rec = [n for n in notes if day <= _d(n) <= wk_end and any(w in (n.get("name") or "").lower() for w in RECOVERY_WORDS)]
+        weeks.append(_clean({
+            "event_id": t.get("id"), "week_start": day,
+            "week_no": ((parse_day(day, "d") - parse_day(_d(start), "d")).days // 7 + 1) if start else None,
+            "phase": phase_of(day), "recovery_week": True if rec else None,
+            "weeks_to_race": ((parse_day(_d(a_race), "d") - parse_day(day, "d")).days // 7) if a_race else None,
+            "name": t.get("name"), "type": t.get("type"), **event_targets(t),
+        }))
+    filled = sum(1 for w in weeks if any(k in w for k in ("target_load", "target_hours", "target_km")))
+    out = {
+        "today": today,
+        "season_start": _clean({"event_id": start.get("id"), "name": start.get("name"), "date": _d(start)}) if start else None,
+        "phases": phases,
+        "races": [_clean({"event_id": r.get("id"), "category": r.get("category"), "name": r.get("name"), "date": _d(r),
+                          "planned_km": _r(r["distance"] / 1000.0, 1) if r.get("distance") else None,
+                          "planned_h": _r(r["moving_time"] / 3600.0) if r.get("moving_time") else None}) for r in races],
+        "weeks": weeks,
+        "weeks_total": len(weeks), "weeks_with_targets": filled,
+    }
+    if targets and not filled:
+        # nothing numeric found: show which fields the first TARGET event really carries
+        out["note"] = "TARGET events carry no load/time/distance values yet"
+        out["sample_target_fields"] = {k: v for k, v in targets[0].items() if v not in (None, "", [], {}) and k not in _SAMPLE_SKIP}
+    return out
 
 
 ZONE_KEYS = ("types", "lthr", "max_hr", "hr_zones", "hr_zone_names", "threshold_pace", "pace_units", "pace_zones",

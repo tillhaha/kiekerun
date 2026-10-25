@@ -19,8 +19,8 @@ from datetime import timedelta
 from typing import Callable
 
 from server.ratelimit import RateLimiter
-from tcoach.coach_data import (ACTIVITY_FIELDS, parse_day, plan_vs_actual, resolve_range, summarize_activity,
-                               summarize_activity_detail, summarize_wellness, summarize_workout_doc, summarize_zones)
+from tcoach.coach_data import (ACTIVITY_FIELDS, SEASON_CATEGORIES, parse_day, plan_vs_actual, resolve_range, summarize_activity,
+                               summarize_activity_detail, summarize_season, summarize_wellness, summarize_workout_doc, summarize_zones)
 from tcoach.intervals_client import IntervalsClient, IntervalsError, slug
 from tcoach.intervals_text import to_intervals_text
 from tcoach.machine import has_errors, validate
@@ -54,6 +54,11 @@ TOOLS = [
                     "targets (hr / pace / power / %). Use it after saving to check that a step carries an HR or pace target and "
                     "not power, because that is what the Garmin receives. event_id from get_plan_vs_actual or a save result.",
      "inputSchema": {"type": "object", "properties": {"event_id": {"type": "integer"}}, "required": ["event_id"]}},
+    {"name": "get_season_plan",
+     "description": "Annual training plan (Saisonplanung) from the intervals.icu calendar: season start, phases (PLAN), weekly "
+                    "targets (TARGET: load / hours / km when set), recovery weeks, races (RACE_A/B/C), with week number, phase and "
+                    "weeks to the A race per week. Default window: 60 days back to 330 days ahead.",
+     "inputSchema": {"type": "object", "properties": _RANGE}},
     {"name": "get_plan_vs_actual",
      "description": "Per day: planned calendar entries (workouts, races, notes) next to the activities actually done. "
                     "Planned workouts get status done / open / no paired activity.",
@@ -287,6 +292,18 @@ def call_tool(name: str, args: dict, cl: IntervalsClient, today: str, allow_writ
             if ev.get("category") != "WORKOUT":
                 raise ValueError("event is not a planned workout")
             return _text(summarize_workout_doc(ev))
+        if name == "get_season_plan":
+            t = parse_day(today, "today")
+            a = dict(args)
+            if not a.get("oldest") and not a.get("newest"):
+                a["oldest"], a["newest"] = (t - timedelta(days=60)).isoformat(), (t + timedelta(days=330)).isoformat()
+            elif not a.get("newest"):
+                a["newest"] = (parse_day(a["oldest"], "oldest") + timedelta(days=MAX_RANGE_DAYS)).isoformat()
+            elif not a.get("oldest"):
+                a["oldest"] = (parse_day(a["newest"], "newest") - timedelta(days=MAX_RANGE_DAYS)).isoformat()
+            oldest, newest = resolve_range(a, today)
+            events = [e for e in cl.list_events(oldest, newest, category=None) if e.get("category") in SEASON_CATEGORIES]
+            return _text({"oldest": oldest, "newest": newest, **summarize_season(events, today)})
         if name == "get_plan_vs_actual":
             oldest, newest = resolve_range(args, today)
             events = cl.list_events(oldest, newest, category=None)
