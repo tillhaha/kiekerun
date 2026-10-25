@@ -145,6 +145,13 @@ Mögliche nächste Schritte: OAuth statt geheimer URL für den Connector (Login,
 Strava: ein direkter Upload aus KiekeRun wurde gebaut und wieder entfernt, weil Strava für API-Apps ein Abo des App-Besitzers
 verlangt (403 `Application / Status / Inactive`). Laufband-Einheiten erreichen Strava vorerst nicht.
 
+## Lauf-Archiv
+
+Jeder Laufband-Lauf wird während der Aufzeichnung alle 10 s im Browser und in der Server-Datenbank (SQLite, `KIEKERUN_DB`,
+Volume auf `/data`) gesichert. Er bleibt, bis der Upload zu intervals.icu geklappt hat. Auf dem Plan-Screen listet
+"Saved runs" die letzten drei; ein Tipp öffnet die Summary mit dem normalen Upload-Knopf. Auslöser war der Samstag,
+dessen Lauf nach einem Neuladen der Seite weg war.
+
 ## Hinweise
 
 - Laufband-Einheiten werden nur über KiekeRun aufgezeichnet, nicht über die Garmin.

@@ -21,6 +21,7 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 | `TRUSTED_PROXY_HOPS` | optional, default `1`: reverse proxies in front of the app (Coolify's Traefik = 1; Cloudflare in front of it = 2). Decides which `X-Forwarded-For` entry counts as the client address |
 | `RATE_FAILS`, `RATE_WINDOW_S`, `RATE_LOCKOUT_S` | optional, default 10 / 900 / 900: after 10 wrong logins or wrong connector tokens within 15 min an address is locked out for 15 min |
 | `MCP_RATE_PER_MIN` | optional, default `60`: valid connector requests per address per minute |
+| `KIEKERUN_DB` | optional, default `/data/kiekerun.db`: the run archive (SQLite). Add a Coolify persistent storage with destination path `/data`, otherwise the archive is lost on every deploy (the plan screen warns about it) |
 | `MCP_ALLOW_WRITE` | optional, `1` lets the connector plan and delete calendar workouts. Default off: read-only, write tools are not even listed |
 
 ## API (HTTP Basic login)
@@ -31,7 +32,14 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 | `POST /api/planned` `{workout, date}` | create/update a planned workout (matched by `external_id`) |
 | `POST /api/upload` `{log, paired_event_id?}` | runner log -> FIT (elevation, HR, calorie estimate) -> intervals.icu activity; then RPE, feel, carbs and a description (note + vertical speed per block) are set on it |
 
+| `GET /api/runs` | archived runs (newest first) plus `enabled` / `persistent` |
+| `POST /api/runs` `{log, status}` | autosave / final save of a run (`recording` or `finished`) from the page |
+| `GET /api/runs/<id>`, `DELETE /api/runs/<id>` | one archived run with its full log / remove it |
+
 Endpoints were checked against https://intervals.icu/api/v1/docs.
+
+## Run archive
+A treadmill run is no longer lost with the tab. While it is recorded the page saves it every 10 s, in the browser (`localStorage`, last 6 runs) and in the server database; the finished run stays there until `/api/upload` succeeded, which marks it uploaded. The plan screen lists the 3 newest under "Saved runs" (Interrupted / Not uploaded / Uploaded); a tap opens the summary with the normal upload button, also from another device if the server database is on. Status only moves forward (recording, finished, uploaded), a late autosave never overwrites a finished run. The archive is not a backup: keep uploading to intervals.icu.
 
 ## Coach connector (read-only MCP)
 

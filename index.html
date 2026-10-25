@@ -120,6 +120,8 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 /* ---------- 1 · Plan ---------- */
 .plan-screen{grid-template-rows:minmax(0,1fr) auto}
 .plan-grid{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr);gap:12px;min-height:0}
+.loadcol{overflow-y:auto}
+.loadcol>*{flex:none}
 [data-theme="night"] .loadcol{border-right:1px solid var(--line);padding-right:20px}
 .drop{border:2px dashed var(--line);border-radius:var(--r);padding:26px 16px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color .15s,background .15s}
 .drop:hover,.drop.over{border-color:var(--ink)}
@@ -335,6 +337,9 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <button class="pri" id="todaybtn">Today's workout</button>
         <div class="muted" id="todaymsg" hidden></div>
         <div class="recent" id="todaylist"></div>
+        <h2 class="lbl" id="runs-h" hidden>Saved runs</h2>
+        <div class="recent" id="runs" hidden></div>
+        <div class="muted" id="runs-note" hidden></div>
         <input type="file" id="file" accept=".json,application/json" hidden>
         <div class="drop" id="filebtn" role="button" tabindex="0" aria-label="Load a workout JSON file">
           <svg viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M4 15v4a1 1 0 001 1h14a1 1 0 001-1v-4"/></svg>
@@ -593,7 +598,7 @@ function renderFB(){
  $("fbundo").disabled=!FB.carbs.length;
  const s=fbSummary();$("fbsum").textContent=s?"Feedback: "+s:"";
  $("fbbtn2").classList.toggle("has",!!s)}
-function fbChanged(){renderFB();refreshLog()}
+function fbChanged(){renderFB();refreshLog();if(LAST_LOG&&!S)persistRun(LAST_LOG,"finished")}
 for(let i=1;i<=10;i++){const b=document.createElement("button");b.textContent=i;b.dataset.v=i;b.onclick=()=>{FB.rpe=FB.rpe===i?null:i;fbChanged()};$("fbrpe").appendChild(b)}
 FEEL.forEach(([v,l])=>{const b=document.createElement("button");b.textContent=l;b.dataset.v=v;b.onclick=()=>{FB.feel=FB.feel===v?null:v;fbChanged()};$("fbfeel").appendChild(b)});
 document.querySelectorAll("#fbmodal [data-g]").forEach(b=>b.onclick=()=>{FB.carbs.push([fbT(),+b.dataset.g]);fbChanged()});
@@ -633,7 +638,7 @@ const HASH={setup:"#plan",run:"#run",done:"#summary"};
 /* A running workout owns the page (the plan must not change under it); otherwise Plan and the last Summary can be visited freely. */
 const canGo=n=>S?n==="run":n==="setup"||(n==="done"&&!!LAST_LOG);
 function renderSteps(){const o=["setup","run","done"],c=o.indexOf(SCREEN);o.forEach((k,x)=>{$("st-"+k).className=(x===c?"on":x<c?"past":"")+(x!==c&&canGo(k)?" go":"")})}
-function show(n,push=true){SCREEN=n;renderSt();["setup","run","done"].forEach(k=>$(k).hidden=k!==n);renderSteps();window.scrollTo(0,0);
+function show(n,push=true){SCREEN=n;if(n==="setup")refreshRuns();renderSt();["setup","run","done"].forEach(k=>$(k).hidden=k!==n);renderSteps();window.scrollTo(0,0);
  if(push&&location.hash!==HASH[n])try{history.pushState(null,"",HASH[n])}catch(e){}}
 ["setup","run","done"].forEach(k=>$("st-"+k).onclick=()=>{if(k!==SCREEN&&canGo(k))show(k)});
 function fromHash(){const n=Object.keys(HASH).find(k=>HASH[k]===location.hash)||"setup";show(canGo(n)?n:(S?"run":"setup"),false);if(location.hash!==HASH[SCREEN])try{history.replaceState(null,"",HASH[SCREEN])}catch(e){}}
@@ -663,9 +668,9 @@ function renderFuelPv(tot){const el=$("pvfuel");if(!FUEL.length){el.hidden=true;
  const fk=k=>FUEL.filter(f=>f.k===k).reduce((a,f)=>a+f.fl,0),g=fk("gel"),d=fk("drink");
  el.innerHTML=`<h2 class="lbl">Fuel plan</h2><div class="fsum">${[g?fnum(g)+" Gel-Flask"+(g>1?"s":""):"",d?fnum(d)+" Drink-Flask"+(d>1?"s":""):"",c?c+" g carbs":"",c&&h>=.25?Math.round(c/h)+" g/h":"",fl?fl+" ml":""].filter(Boolean).join(" · ")}</div><div class="chips">`+
   FUEL.map(f=>`<span class="chip">${fmt(f.at)}<i>${[fuelTxt(f),fuelSub(f)].filter(Boolean).join(" · ")}</i></span>`).join("")+"</div>";el.hidden=false}
-function renderSummary(log,e,km){const ev=log.events,segs=ev.map((x,k)=>({dur:Math.max(0.1,(k+1<ev.length?ev[k+1].t:e)-x.t),speed:x.speed,incline:x.incline}));
- const pl=B.map(b=>({dur:b.dur,speed:b.speed,incline:b.incline})),pt=pl.reduce((a,g)=>a+g.dur,0),tot=Math.max(pt,segs.reduce((a,g)=>a+g.dur,0)),vt=vertOf(ev,e);
- const pv=B.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0);
+function renderSummary(log,e,km,plan){const PB=plan||B;const ev=log.events,segs=ev.map((x,k)=>({dur:Math.max(0.1,(k+1<ev.length?ev[k+1].t:e)-x.t),speed:x.speed,incline:x.incline}));
+ const pl=PB.map(b=>({dur:b.dur,speed:b.speed,incline:b.incline})),pt=pl.reduce((a,g)=>a+g.dur,0),tot=Math.max(pt,segs.reduce((a,g)=>a+g.dur,0)),vt=vertOf(ev,e);
+ const pv=PB.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0);
  const mv=log.machine&&log.machine.ascent_m!=null?`<span>Machine ascent<b>${Math.round(log.machine.ascent_m)} m</b></span>`:"";
  const big=(l,v,u)=>`<div class="stat"><span class="lbl">${l}</span><b>${v}${u?`<small>${u}</small>`:""}</b></div>`;
  $("dname").textContent=log.name;$("ddate").textContent="Workout complete · "+new Date(log.started_at).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
@@ -673,6 +678,40 @@ function renderSummary(log,e,km){const ev=log.events,segs=ev.map((x,k)=>({dur:Ma
  const hs=(log.hr||[]).map(x=>x[1]),hv=hs.length?`<span>Avg HR<b>${Math.round(hs.reduce((a,b)=>a+b,0)/hs.length)} bpm</b></span><span>Max HR<b>${Math.max(...hs)} bpm</b></span>`:"";
  $("dsum2").innerHTML=`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`+hv+mv;
  $("dchart").innerHTML=chart(segs,tot,{planned:pl,fill:true})}
+// ---- run archive: browser copy (localStorage) + server database (SQLite)
+const RUNKEY="tc_runs",RANK={recording:0,finished:1,uploaded:2};let RUNS_SRV=false,svBusy=false,svPend=null;
+const rid=l=>"kiekerun-"+String(l.started_at).replace(/[-:]/g,"").slice(0,15);
+function locRead(){try{return JSON.parse(localStorage.getItem(RUNKEY))||[]}catch(e){return[]}}
+function locWrite(a){for(let n=a.length;n>=1;n--){try{localStorage.setItem(RUNKEY,JSON.stringify(a.slice(0,n)));return}catch(e){}}}
+function persistRun(log,status){const id=rid(log),a=locRead(),old=a.find(r=>r.id===id);
+ if(old&&old.status==="uploaded")status="uploaded";else if(old&&old.status==="finished"&&status==="recording")status="finished";
+ locWrite([{id,status,t:Date.now(),log},...a.filter(r=>r.id!==id)].slice(0,6));
+ if(RUNS_SRV&&status!=="uploaded"){svPend={log,status};if(!svBusy)svFlush()}}
+async function svFlush(){while(svPend){const p=svPend;svPend=null;svBusy=true;try{await API("/api/runs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)})}catch(e){}svBusy=false}}
+function markUploaded(log){if(!log)return;const id=rid(log);locWrite(locRead().map(r=>r.id===id?{...r,status:"uploaded"}:r))}
+async function refreshRuns(){let srv=[],persist=true;
+ try{const d=await API("/api/runs?limit=8");RUNS_SRV=!!d.enabled;persist=d.persistent!==false;srv=d.runs||[]}catch(e){RUNS_SRV=false}
+ const m=new Map();
+ locRead().forEach(r=>m.set(r.id,{id:r.id,name:r.log.name,started_at:r.log.started_at,duration_s:r.log.duration_s||0,status:r.status}));
+ srv.forEach(r=>{const o=m.get(r.id);if(!o||RANK[r.status]>RANK[o.status]||(r.status===o.status&&r.duration_s>o.duration_s))m.set(r.id,r)});
+ const list=[...m.values()].sort((a,b)=>String(b.started_at).localeCompare(String(a.started_at))).slice(0,3),box=$("runs");
+ box.innerHTML="";$("runs-h").hidden=$("runs").hidden=!list.length;
+ const note=$("runs-note");note.hidden=!(RUNS_SRV&&!persist&&list.length);note.textContent="The server archive is not on a persistent volume and is lost on the next deploy.";
+ list.forEach(r=>{const b=document.createElement("button"),n=document.createElement("b"),sp=document.createElement("span");
+  n.textContent=r.name||"Run";
+  const st=r.status==="uploaded"?"Uploaded":r.status==="recording"?"Interrupted":"Not uploaded";
+  sp.textContent=new Date(r.started_at).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+" · "+fmt(r.duration_s)+" · "+st;
+  if(r.status!=="uploaded")b.style.borderColor="var(--highlight)";
+  b.append(n,sp);b.onclick=()=>openRun(r.id,r.status);box.appendChild(b)})}
+async function openRun(id,status){if(S)return;let log=(locRead().find(r=>r.id===id)||{}).log;
+ if(RUNS_SRV){try{const d=await API("/api/runs/"+id);if(!log||d.log.duration_s>=log.duration_s)log=d.log}catch(e){}}
+ if(!log){alert("This run is no longer available.");return}
+ const e=log.duration_s||0;let plan=[];try{plan=flat(log.workout)}catch(x){}
+ FB={rpe:null,feel:null,note:"",carbs:[],...(log.feedback||{})};$("fbnote").value=FB.note||"";LAST_LOG=log;
+ $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").style.color="";
+ $("upmsg").textContent=status==="uploaded"?"Already uploaded. Uploading again creates no duplicate.":status==="recording"?"This run was interrupted. The saved part is shown.":"";
+ renderSummary(log,e,distOf(log.events,e),plan);show("done");refreshLog();renderFB()}
+
 // ---- run
 var S=null;let AC=null,wl=null,tick=null,hrt=null;
 function beep(n,f=880,len=.18){if(!$("snd").checked||!AC)return;for(let i=0;i<n;i++){const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;o.connect(g);g.connect(AC.destination);const t=AC.currentTime+i*.28;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.4,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+len);o.start(t);o.stop(t+len+.02)}}
@@ -733,7 +772,8 @@ $("fuelcard").onclick=()=>{if(!S||S.paused||S.hold||!S.fz)return;const e=elapsed
 function pace(kmh){if(!(kmh>0))return"–";const t=Math.round(3600/kmh);return Math.floor(t/60)+":"+String(t%60).padStart(2,"0")}
 function hrLoop(){if(!S)return;const b=hrNow();$("hrv").textContent=b??"–";
  if(HR.want&&HR.dev&&HR.dev.gatt.connected&&!S.hold&&!S.paused){if(b==null){S.hrGap=(S.hrGap||0)+1;if(S.hrGap===10)BLE.st("No heart-rate signal from the strap.",true,"hrgap")}else{if(S.hrGap>=10)BLE.clr("hrgap");S.hrGap=0}}
- if(b!=null&&!S.paused&&!S.hold){const t=Math.round(elapsed()),l=S.hr[S.hr.length-1];if(!l||l[0]!==t)S.hr.push([t,b])}}
+ if(b!=null&&!S.paused&&!S.hold){const t=Math.round(elapsed()),l=S.hr[S.hr.length-1];if(!l||l[0]!==t)S.hr.push([t,b])}
+ if(!S.hold&&Date.now()-(S.sv||0)>10000){S.sv=Date.now();persistRun(mkLog(Math.min(elapsed(),S.end)),"recording")}}
 function distOf(ev,end){let km=0;for(let k=0;k<ev.length;k++){const t1=k+1<ev.length?ev[k+1].t:end;km+=ev[k].speed*Math.max(0,t1-ev[k].t)/3600}return km}
 function vertOf(ev,end){let up=0;for(let k=0;k<ev.length;k++){const t1=k+1<ev.length?ev[k+1].t:end,dt=Math.max(0,t1-ev[k].t);if(ev[k].incline>0)up+=rise(ev[k].speed*dt/3600,ev[k].incline)}return up}
 document.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=()=>{if(!S||S.paused||S.hold)return;const a=btn.dataset.a,d=parseFloat(a.slice(1));
@@ -741,17 +781,19 @@ document.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=()=>{if(!S||S.pau
 $("pause").onclick=()=>{if(!S)return;if(S.paused){S.pausedMs+=Date.now()-S.pauseAt;S.paused=false;BLE.send(S.speed,S.incline);$("stop").disabled=true;$("stop").className="ghost";$("pause").textContent="Pause";$("banner").className="banner";$("banner").textContent="resumed"}
  else{S.paused=true;S.pauseAt=Date.now();$("stop").disabled=false;$("stop").className="";$("pause").textContent="Resume";$("banner").className="banner soon";$("banner").textContent="PAUSED — timer stopped, belt keeps running"}};
 $("stop").onclick=()=>S&&finish(true);
+function mkLog(e){const o=fbOut(),l={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,blocks:B.map(b=>({label:b.label,t0:b.t0,dur:b.dur})),machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc},workout:W};if(Object.keys(o).length)l.feedback=o;return l}
 function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);clearInterval(hrt);BLE.clr("hrgap");BLE.stop();try{wl&&wl.release()}catch(x){}
  if(!early)beep(4,1319);vib([500,150,500]);
- const log={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,blocks:B.map(b=>({label:b.label,t0:b.t0,dur:b.dur})),machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc}};
+ const log=mkLog(e);
  const km=S.events.reduce((a,ev,k)=>a+ev.speed*Math.max(0,((k+1<S.events.length?S.events[k+1].t:e)-ev.t))/3600,0);
  show("done");
  $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").textContent="";$("upmsg").style.color="";
  renderSummary(log,e,km);
- LAST_LOG=log;S=null;refreshLog();renderFB();renderSteps()}
+ LAST_LOG=log;S=null;refreshLog();renderFB();renderSteps();persistRun(log,"finished")}
 $("again").onclick=()=>show("setup");
 $("up").onclick=async()=>{const t=$("logout").textContent;if(!t)return;const b=$("up"),m=$("upmsg");b.disabled=true;m.style.color="";m.textContent="Uploading…";
  try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED})});
+  if(d.ok)markUploaded(LAST_LOG);
   const a0=d.intervals&&d.intervals.activities&&d.intervals.activities[0],id=a0&&a0.id;
   if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded";if(d.calories)m.append(" · ~"+d.calories+" kcal (estimate)");if(d.update_error)m.append(" · Feedback fields not saved: "+d.update_error)}
   else{m.textContent="intervals.icu created no new activity (this session was probably uploaded already).";b.textContent="Already uploaded"}

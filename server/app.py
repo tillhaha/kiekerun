@@ -9,6 +9,7 @@ Environment (set in Coolify, never in the repo or the page):
   RATE_FAILS / RATE_WINDOW_S / RATE_LOCKOUT_S   failed-login lockout (default 10 fails in 900 s -> 900 s lockout)
   MCP_ALLOW_WRITE                           1 lets the connector plan/delete calendar workouts (default: read-only)
   MCP_RATE_PER_MIN                          valid connector requests per IP per minute (default 60)
+  KIEKERUN_DB                               run archive (SQLite), default /data/kiekerun.db; mount a volume on /data
 
 The API fails closed: without KIEKERUN_USER/KIEKERUN_PASSWORD every /api route
 answers 503, so nobody can write to the calendar through a public URL.
@@ -29,6 +30,7 @@ from pydantic import BaseModel
 
 from server import mcp as mcpmod
 from server.ratelimit import FailLimiter, RateLimiter
+from server.runstore import ID_RE, RunStore, run_id
 from tcoach.calories import estimate_kcal
 from tcoach.feedback import block_stats, build_description, parse_feedback
 from tcoach.fit_writer import write_fit
@@ -188,6 +190,72 @@ def plan(body: PlanIn):
     return {"ok": True, "event": res[0]}
 
 
+_RUNS: dict[str, RunStore | None] = {}
+
+
+def runs() -> RunStore | None:
+    """The run archive, or None if its file cannot be created. One store per configured path."""
+    path = os.environ.get("KIEKERUN_DB", "/data/kiekerun.db")
+    if path not in _RUNS:
+        _RUNS[path] = RunStore.from_env()
+    return _RUNS[path]
+
+
+class RunIn(BaseModel):
+    log: dict
+    status: str = "recording"
+
+
+def _parse_start(log: dict) -> datetime:
+    try:
+        start = datetime.fromisoformat(str(log["started_at"]).replace("Z", "+00:00"))
+    except (KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(422, f"bad log: started_at ({exc})")
+    return start if start.tzinfo else start.replace(tzinfo=timezone.utc)
+
+
+@app.get("/api/runs", dependencies=[Depends(require_login)])
+def runs_list(limit: int = 30):
+    st = runs()
+    if st is None:
+        return {"enabled": False, "runs": []}
+    return {"enabled": True, "persistent": st.persistent, "runs": st.list(max(1, min(limit, 100)))}
+
+
+@app.post("/api/runs", dependencies=[Depends(require_login)])
+def runs_save(body: RunIn):
+    """Autosave / final save of a run log from the page (status recording or finished)."""
+    st = runs()
+    if st is None:
+        raise HTTPException(503, "run archive unavailable")
+    if body.status not in ("recording", "finished"):
+        raise HTTPException(422, "status must be recording or finished")
+    if not isinstance(body.log.get("events"), list) or not isinstance(body.log.get("hr", []), list):
+        raise HTTPException(422, "bad log: events/hr")
+    rid = run_id(_parse_start(body.log))
+    try:
+        return {"id": rid, "status": st.save(rid, body.log, body.status)}
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@app.get("/api/runs/{rid}", dependencies=[Depends(require_login)])
+def runs_get(rid: str):
+    st = runs()
+    r = st.get(rid) if st and ID_RE.match(rid) else None
+    if r is None:
+        raise HTTPException(404, "run not found")
+    return r
+
+
+@app.delete("/api/runs/{rid}", dependencies=[Depends(require_login)])
+def runs_delete(rid: str):
+    st = runs()
+    if not (st and ID_RE.match(rid) and st.delete(rid)):
+        raise HTTPException(404, "run not found")
+    return {"ok": True}
+
+
 class UploadIn(BaseModel):
     log: dict
     paired_event_id: int | None = None
@@ -229,13 +297,13 @@ def upload(body: UploadIn):
     kcal = estimate_kcal(samples, weight) if weight else None
     description = build_description(fb, stats, len(samples), kcal)
 
+    ext_id = run_id(start)
     with tempfile.TemporaryDirectory() as tmp:
         fit = Path(tmp) / "kiekerun.fit"
         tot = write_fit(samples, fit, start=start, calories=kcal)
         res = _intervals_call(
             cl.upload_activity, fit, name=log.get("name"),
-            external_id=f"kiekerun-{start.astimezone(timezone.utc):%Y%m%dT%H%M%S}",
-            paired_event_id=body.paired_event_id, device_name="KiekeRun")
+            external_id=ext_id, paired_event_id=body.paired_event_id, device_name="KiekeRun")
 
     fields = {}
     if fb.rpe:
@@ -253,8 +321,15 @@ def upload(body: UploadIn):
             cl.update_activity(acts[0]["id"], fields)
         except IntervalsError as exc:  # the upload itself succeeded, so report instead of failing
             update_error = str(exc)
+    store_error = None
+    st = runs()
+    if st is not None:  # archive the run as uploaded; a database problem never fails the upload
+        try:
+            st.save(ext_id, log, "uploaded", acts[0]["id"] if acts else None)
+        except Exception as exc:  # noqa: BLE001 - sqlite and value errors alike
+            store_error = str(exc)
     return {"ok": True, "totals": tot, "calories": kcal, "updated": sorted(fields), "update_error": update_error,
-            "intervals": res}
+            "intervals": res, "store_error": store_error}
 
 
 # ---------------------------------------------------------------- coach connector (MCP, read-only)
