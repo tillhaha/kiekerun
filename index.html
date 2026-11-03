@@ -649,10 +649,12 @@ const kpi=(l,v,c="")=>`<div class="kpi ${c}"><span class="lbl">${l}</span><b>${v
 function niceStep(t){return [15,30,60,120,300,600,900,1200,1800,3600].find(x=>t/x<=8)||3600}
 function stepPts(segs,tot,fy){let x=0,p=[];segs.forEach(g=>{const w=g.dur/tot*1000,y=fy(g).toFixed(1);p.push(x.toFixed(1)+","+y,(x+w).toFixed(1)+","+y);x+=w});return p.join(" ")}
 let chartN=0;const HRLO=80,HRHI=180;
+const hrY=b=>(100-(Math.min(HRHI,Math.max(HRLO,b))-HRLO)/(HRHI-HRLO)*100).toFixed(1);
+function hrPath(hr,tot){let d="",pt=-99;for(const [t,b] of hr){d+=(t-pt>5?"M":"L")+(t/tot*1000).toFixed(1)+" "+hrY(b);pt=t}return d}
 /* HR line of the running workout: fixed 80-180 bpm scale on the chart height, a gap in the signal breaks the line */
 function drawHr(){const p=$("tl").querySelector(".c-hr");if(!p||!S||!S.hr.length)return;const [t,b]=S.hr[S.hr.length-1];
  if(S.hr.length===1){S.hd="";S.hp=-99}
- S.hd+=(t-S.hp>5?"M":"L")+(t/S.end*1000).toFixed(1)+" "+(100-(Math.min(HRHI,Math.max(HRLO,b))-HRLO)/(HRHI-HRLO)*100).toFixed(1);S.hp=t;p.setAttribute("d",S.hd)}
+ S.hd+=(t-S.hp>5?"M":"L")+(t/S.end*1000).toFixed(1)+" "+hrY(b);S.hp=t;p.setAttribute("d",S.hd)}
 function chart(segs,tot,o={}){const pl=o.planned||[];
  const mi=Math.max(0,...segs.map(g=>g.incline),...pl.map(g=>g.incline)),iMax=Math.min(40,Math.max(8,Math.ceil((mi+1)/4)*4)),
   ms=Math.max(1,...segs.map(g=>g.speed),...pl.map(g=>g.speed)),sMax=Math.max(4,Math.ceil((ms+.5)/4)*4),H=100;
@@ -663,7 +665,7 @@ function chart(segs,tot,o={}){const pl=o.planned||[];
  const grid=[25,50,75].map(y=>`<line class="g" x1="0" x2="1000" y1="${y}" y2="${y}"/>`).join("");
  const ql=(m,c,u)=>`<div class="yl ${c}">`+[0,25,50,75].map(y=>`<span${y?"":' class="t"'} style="top:${y}%">${+(m*(100-y)/100).toFixed(1)}</span>`).join("")+`<span class="u">${u}</span></div>`;
  const st=niceStep(tot);let xl="";for(let t=0;t<=tot;t+=st)xl+=`<span style="left:${t/tot*100}%">${fmt(t)}</span>`;
- return `<div class="chartbox${o.fill?" fill":""}" style="--ch:${o.h||150}px"><div class="pw">${ql(sMax,"l","km/h")}${ql(iMax,"r","%")}<div class="plot"><svg viewBox="0 0 1000 100" preserveAspectRatio="none">${grid}${inc}${pl.length?`<polyline class="c-plan" points="${stepPts(pl,tot,fs)}"/>`:""}<polyline class="c-spd" points="${stepPts(segs,tot,fs)}"/>${o.hr?'<path class="c-hr" d=""/>':""}</svg>${o.hr?`<div class="hrleg">HR ${HRLO}–${HRHI} bpm</div>`:""}${o.playhead?'<div class="playhead"></div>':""}</div></div>
+ return `<div class="chartbox${o.fill?" fill":""}" style="--ch:${o.h||150}px"><div class="pw">${ql(sMax,"l","km/h")}${ql(iMax,"r","%")}<div class="plot"><svg viewBox="0 0 1000 100" preserveAspectRatio="none">${grid}${inc}${pl.length?`<polyline class="c-plan" points="${stepPts(pl,tot,fs)}"/>`:""}<polyline class="c-spd" points="${stepPts(segs,tot,fs)}"/>${o.hr||o.hrData?`<path class="c-hr" d="${o.hrData?hrPath(o.hrData,tot):""}"/>`:""}</svg>${o.hr||o.hrData?`<div class="hrleg">HR ${HRLO}–${HRHI} bpm</div>`:""}${o.playhead?'<div class="playhead"></div>':""}</div></div>
  <div class="xl">${xl}</div></div>`}
 function renderPreview(B){const tot=B.reduce((a,b)=>a+b.dur,0);
  $("pvtl").innerHTML=chart(B,tot,{h:130});
@@ -683,7 +685,7 @@ function renderSummary(log,e,km,plan){const PB=plan||B;const ev=log.events,segs=
  $("dsum").innerHTML=big("Time",fmt(e))+big("Distance",km.toFixed(2),"km")+big("Elevation gain","+"+Math.round(vt),"m")+big("Avg speed",(km/(Math.max(e,1)/3600)).toFixed(1),"km/h");
  const hs=(log.hr||[]).map(x=>x[1]),hv=hs.length?`<span>Avg HR<b>${Math.round(hs.reduce((a,b)=>a+b,0)/hs.length)} bpm</b></span><span>Max HR<b>${Math.max(...hs)} bpm</b></span>`:"";
  $("dsum2").innerHTML=`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`+hv+mv;
- $("dchart").innerHTML=chart(segs,tot,{planned:pl,fill:true})}
+ $("dchart").innerHTML=chart(segs,tot,{planned:pl,fill:true,hrData:(log.hr||[]).length?log.hr:null})}
 // ---- run archive: browser copy (localStorage) + server database (SQLite)
 const RUNKEY="tc_runs",RANK={recording:0,finished:1,uploaded:2};let RUNS_SRV=false,svBusy=false,svPend=null;
 const rid=l=>"kiekerun-"+String(l.started_at).replace(/[-:]/g,"").slice(0,15);
