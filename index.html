@@ -53,7 +53,7 @@ button.pri{background:var(--primary);color:var(--primary-ink);border-color:trans
 button.ghost{background:transparent;color:var(--muted)}
 button.big{height:64px;padding:0 56px;font-size:24px}
 .icon{width:44px;height:44px;padding:0;display:grid;place-items:center}
-.icon svg,.pill svg,.drop svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.icon svg,.pill svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .pill{display:flex;align-items:center;gap:8px;height:44px;padding:0 14px;font-size:15px}
 .tools #themebtn,.tools .pill{width:88px;justify-content:center;padding:0}
 .pill .hrt{font:700 15px var(--fd);letter-spacing:.08em}
@@ -132,11 +132,6 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .loadcol{overflow-y:auto}
 .loadcol>*{flex:none}
 [data-theme="night"] .loadcol{border-right:1px solid var(--line);padding-right:20px}
-.drop{border:2px dashed var(--line);border-radius:var(--r);padding:26px 16px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color .15s,background .15s}
-.drop:hover,.drop.over{border-color:var(--ink)}
-.drop.over{background:var(--surface-2)}
-.drop svg{width:34px;height:34px;color:var(--ink);margin-bottom:6px}
-.drop b{font:700 24px var(--fd);letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}
 .recent{display:flex;flex-direction:column;gap:8px}
 .recent button{height:auto;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;text-transform:none;letter-spacing:0;background:transparent;text-align:left}
 .recent button b{font:700 19px var(--fd);letter-spacing:.03em;text-transform:uppercase}
@@ -353,14 +348,6 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <button class="pri" id="todaybtn">Today's workout</button>
         <div class="muted" id="todaymsg" hidden></div>
         <div class="recent" id="todaylist"></div>
-        <h2 class="lbl" id="runs-h" hidden>Saved runs</h2>
-        <div class="recent" id="runs" hidden></div>
-        <div class="muted" id="runs-note" hidden></div>
-        <input type="file" id="file" accept=".json,application/json" hidden>
-        <div class="drop" id="filebtn" role="button" tabindex="0" aria-label="Load a workout JSON file">
-          <svg viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M4 15v4a1 1 0 001 1h14a1 1 0 001-1v-4"/></svg>
-          <b>Drop a .json file</b><span>or tap to choose</span>
-        </div>
         <h2 class="lbl">Examples</h2>
         <div class="recent">
           <button id="ex1"><b>Threshold 4×8</b><span>1:02:00 · 9.1 km</span></button>
@@ -375,9 +362,12 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <details class="paste" id="pastebox"><summary>Paste or edit JSON</summary>
           <textarea id="json" spellcheck="false" placeholder='{"name":"…","blocks":[{"label":"…","duration":"10m","speed":8,"incline":2},{"repeat":4,"blocks":[…]}]}'></textarea>
         </details>
+        <h2 class="lbl" id="runs-h" hidden>Saved runs</h2>
+        <div class="recent" id="runs" hidden></div>
+        <div class="muted" id="runs-note" hidden></div>
       </div>
       <div class="card preview">
-        <div><h2 class="lbl">Preview</h2><h1 class="ptitle" id="ctaname">No workout loaded</h1><p class="pnote" id="ctanote">Pick an example or drop your own workout.</p></div>
+        <div><h2 class="lbl">Preview</h2><h1 class="ptitle" id="ctaname">No workout loaded</h1><p class="pnote" id="ctanote">Load today's workout or pick an example.</p></div>
         <div id="sum"></div>
         <div id="issues" class="issues"></div>
         <div id="pvtl"></div>
@@ -441,7 +431,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <pre id="logout" hidden></pre>
         <div class="muted" id="fbsum"></div>
         <div class="muted" id="upmsg"></div>
-        <div class="export"><button id="fbbtn2">Workout-Feedback</button><button class="pri" id="up">Upload to intervals.icu</button><button class="ghost" id="again">New</button></div>
+        <div class="export"><button id="fbbtn2">Workout-Feedback</button><button class="pri" id="up">Upload to intervals.icu</button><button class="ghost" id="discard">Discard run</button><button class="ghost" id="again">New</button></div>
       </div>
     </div>
   </section>
@@ -507,14 +497,7 @@ function parse(){const box=$("issues"),sum=$("sum");box.innerHTML="";sum.innerHT
  $("readytxt").textContent=$("start").disabled?"Fix the errors above to start":is.length?"Ready, with "+is.length+" warning"+(is.length>1?"s":""):"All blocks within treadmill limits"}
 $("json").oninput=()=>{PLANNED=null;parse()};
 ["ex1","ex2","ex3","ex4","ex5"].forEach(k=>$(k).onclick=()=>{PLANNED=null;$("json").value=JSON.stringify(EX[k],null,1);parse();document.querySelectorAll(".recent button").forEach(b=>b.classList.toggle("sel",b.id===k))});
-$("filebtn").onclick=()=>$("file").click();
-$("filebtn").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("file").click()}};
-function loadFile(f){if(!f)return;const r=new FileReader();r.onload=()=>{PLANNED=null;$("json").value=r.result;document.querySelectorAll(".recent button").forEach(b=>b.classList.remove("sel"));parse()};r.readAsText(f)}
-$("file").onchange=e=>{loadFile(e.target.files[0]);e.target.value=""};
-const dz=$("filebtn");["dragenter","dragover"].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add("over")}));
-["dragleave","drop"].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove("over")}));
-dz.addEventListener("drop",e=>loadFile(e.dataTransfer.files[0]));
-document.addEventListener("dragover",e=>e.preventDefault());document.addEventListener("drop",e=>{if(!dz.contains(e.target)){e.preventDefault();loadFile(e.dataTransfer&&e.dataTransfer.files[0])}});
+document.addEventListener("dragover",e=>e.preventDefault());document.addEventListener("drop",e=>e.preventDefault());
 try{const s=localStorage.getItem("tc_json");if(s){$("json").value=s;parse()}}catch(e){}
 
 // ---- treadmill control (FTMS over Web Bluetooth)
@@ -730,7 +713,7 @@ function renderSummary(log,e,km,plan){const PB=plan||B;const ev=log.events,segs=
 const RUNKEY="tc_runs",RANK={recording:0,finished:1,uploaded:2};let RUNS_SRV=false,svBusy=false,svPend=null;
 const rid=l=>"kiekerun-"+String(l.started_at).replace(/[-:]/g,"").slice(0,15);
 function locRead(){try{return JSON.parse(localStorage.getItem(RUNKEY))||[]}catch(e){return[]}}
-function locWrite(a){for(let n=a.length;n>=1;n--){try{localStorage.setItem(RUNKEY,JSON.stringify(a.slice(0,n)));return}catch(e){}}}
+function locWrite(a){if(!a.length){try{localStorage.removeItem(RUNKEY)}catch(e){}return}for(let n=a.length;n>=1;n--){try{localStorage.setItem(RUNKEY,JSON.stringify(a.slice(0,n)));return}catch(e){}}}
 function persistRun(log,status){const id=rid(log),a=locRead(),old=a.find(r=>r.id===id);
  if(old&&old.status==="uploaded")status="uploaded";else if(old&&old.status==="finished"&&status==="recording")status="finished";
  locWrite([{id,status,t:Date.now(),log},...a.filter(r=>r.id!==id)].slice(0,6));
@@ -756,7 +739,7 @@ async function openRun(id,status){if(S)return;let log=(locRead().find(r=>r.id===
  if(!log){alert("This run is no longer available.");return}
  const e=log.duration_s||0;let plan=[];try{plan=flat(log.workout)}catch(x){}
  FB={rpe:null,feel:null,note:"",carbs:[],...(log.feedback||{})};$("fbnote").value=FB.note||"";LAST_LOG=log;
- $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").style.color="";
+ $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").style.color="";$("discard").hidden=status==="uploaded";
  $("upmsg").textContent=status==="uploaded"?"Already uploaded. Uploading again creates no duplicate.":status==="recording"?"This run was interrupted. The saved part is shown.":"";
  renderSummary(log,e,distOf(log.events,e),plan);show("done");refreshLog();renderFB()}
 
@@ -850,11 +833,18 @@ function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);cle
  show("done");
  $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").textContent="";$("upmsg").style.color="";
  renderSummary(log,e,km);
- LAST_LOG=log;S=null;refreshLog();renderFB();renderSteps();persistRun(log,"finished")}
+ LAST_LOG=log;S=null;$("discard").hidden=false;refreshLog();renderFB();renderSteps();persistRun(log,"finished")}
 $("again").onclick=()=>show("setup");
+let dcT=0;
+$("discard").onclick=async()=>{const b=$("discard");
+ if(!b.dataset.arm){b.dataset.arm="1";b.textContent="Tap again to discard";clearTimeout(dcT);dcT=setTimeout(()=>{delete b.dataset.arm;b.textContent="Discard run"},4000);return}
+ clearTimeout(dcT);delete b.dataset.arm;b.textContent="Discard run";if(!LAST_LOG||S)return;
+ const id=rid(LAST_LOG);locWrite(locRead().filter(r=>r.id!==id));svPend=null;
+ if(RUNS_SRV){try{await API("/api/runs/"+id,{method:"DELETE"})}catch(e){}}
+ LAST_LOG=null;FB={rpe:null,feel:null,note:"",carbs:[]};$("fbnote").value="";renderFB();renderSteps();show("setup");planMsg("Run discarded.")};
 $("up").onclick=async()=>{const t=$("logout").textContent;if(!t)return;const b=$("up"),m=$("upmsg");b.disabled=true;m.style.color="";m.textContent="Uploading…";
  try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED})});
-  if(d.ok)markUploaded(LAST_LOG);
+  if(d.ok){markUploaded(LAST_LOG);$("discard").hidden=true}
   const a0=d.intervals&&d.intervals.activities&&d.intervals.activities[0],id=a0&&a0.id;
   if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded";if(d.calories)m.append(" · ~"+d.calories+" kcal (estimate)");if(d.update_error)m.append(" · Feedback fields not saved: "+d.update_error)}
   else{m.textContent="intervals.icu created no new activity (this session was probably uploaded already).";b.textContent="Already uploaded"}
