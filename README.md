@@ -30,6 +30,7 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 | `GET /api/health` | connection test: reaches intervals.icu with the configured key |
 | `GET /api/planned?date=YYYY-MM-DD` | planned workouts of a day as kiekerun JSON (default today) |
 | `POST /api/planned` `{workout, date}` | create/update a planned workout (matched by `external_id`) |
+| `GET /api/zones` | Run HR zones from intervals.icu (5 upper limits in bpm) for the zone chip on the run screen |
 | `POST /api/upload` `{log, paired_event_id?}` | runner log -> FIT (elevation, HR, calorie estimate) -> intervals.icu activity; then RPE, feel, carbs and a description (note + vertical speed per block) are set on it |
 
 | `GET /api/runs` | archived runs (newest first) plus `enabled` / `persistent` |

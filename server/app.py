@@ -32,6 +32,7 @@ from server import mcp as mcpmod
 from server.ratelimit import FailLimiter, RateLimiter
 from server.runstore import ID_RE, RunStore, run_id
 from tcoach.calories import estimate_kcal
+from tcoach.coach_data import summarize_zones
 from tcoach.feedback import block_stats, build_description, parse_feedback
 from tcoach.fit_writer import write_fit
 from tcoach.intervals_client import IntervalsClient, IntervalsError
@@ -141,6 +142,15 @@ def health():
     """Connection test: can the server reach intervals.icu with the configured key?"""
     a = _intervals_call(client().athlete)
     return {"ok": True, "athlete_id": a.get("id"), "name": a.get("name")}
+
+
+@app.get("/api/zones", dependencies=[Depends(require_login)])
+def zones():
+    """Run HR zones from intervals.icu (upper limits in bpm, 5 zones) for the zone chip on the run screen."""
+    out = summarize_zones(_intervals_call(client().athlete), "Run")["sport_settings"]
+    hz = (out[0].get("hr_zones") if out else None) or []
+    return {"hr_zones": hz if len(hz) == 5 and all(isinstance(z, (int, float)) for z in hz) else None,
+            "lthr": out[0].get("lthr") if out else None}
 
 
 @app.get("/api/planned", dependencies=[Depends(require_login)])

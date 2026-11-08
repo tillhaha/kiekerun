@@ -80,6 +80,16 @@ def test_health(make):
     assert http.calls[0][2]["auth"] == ("API_KEY", "k")
 
 
+def test_zones_returns_run_hr_zones(make):
+    ath = {"sportSettings": [{"types": ["Ride"], "hr_zones": [100, 120, 140, 150, 160]},
+                             {"types": ["Run", "VirtualRun"], "lthr": 163, "hr_zones": [137, 148, 157, 164, 180]}]}
+    c, _ = make({("GET", ""): FakeResp(200, ath)})
+    assert c.get("/api/zones", headers=AUTH).json() == {"hr_zones": [137, 148, 157, 164, 180], "lthr": 163}
+    c2, _ = make({("GET", ""): FakeResp(200, {"sportSettings": []})})
+    assert c2.get("/api/zones", headers=AUTH).json() == {"hr_zones": None, "lthr": None}
+    assert c2.get("/api/zones").status_code == 401
+
+
 def test_health_reports_rejected_key_as_502_not_401(make):
     c, _ = make({("GET", ""): FakeResp(401, {})})
     r = c.get("/api/health", headers=AUTH)
