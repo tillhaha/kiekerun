@@ -207,12 +207,19 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .val .n{white-space:nowrap}
 .val .n small{font-size:.28em;font-weight:600;letter-spacing:.04em;margin-left:.15em;opacity:.55}
 .val .u{font:600 15px var(--fd);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:6px;display:flex;gap:8px}
-.grow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;min-height:0}
+.grow{display:grid;grid-template-columns:54px repeat(4,minmax(0,1fr));gap:12px;min-height:0}
+.r1{--rc:var(--muted);--rbg:var(--surface-2);--rfg:var(--ink)}
+.r2{--rc:var(--highlight);--rbg:var(--highlight);--rfg:var(--highlight-ink)}
+.r3{--rc:var(--hrline);--rbg:var(--hrline);--rfg:#fff}
+[data-theme="night"] .r3{--rfg:#0a0b0d}
+.rail{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--rbg);color:var(--rfg);border-radius:var(--r)}
+.rail svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.grow .tile,.grow .fuelcard:not(.live){box-shadow:inset 0 4px 0 var(--rc)}
+.grow .tile.blk{box-shadow:inset 0 0 0 2px var(--highlight),inset 0 4px 0 var(--rc)}
 .grow .tile{padding:8px 16px;container-type:size}
 .grow .val .n{font-size:clamp(28px,46cqh,84px);line-height:.95}
 .grow .val .n small{font-size:15px;opacity:.6}
 .grow .val .u{margin-top:2px;line-height:1.1;min-height:1.1em}
-.grow .tile.blk{box-shadow:inset 0 0 0 2px var(--highlight)}
 .grow .tile.blk .bar{margin-top:6px;flex:none}
 .grow .fuelcard{justify-content:center}
 .adjc{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:0}
@@ -284,7 +291,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
   .app{height:auto;min-height:0}
   .top{grid-template-columns:1fr auto}.steps{grid-column:1/-1;grid-row:2;justify-content:center}
   .plan-grid,.sum-body,.bottom,.toprow{grid-template-columns:1fr}
-  .grow{grid-template-columns:1fr 1fr}.grow .tile{container-type:normal}.grow .val .n{font-size:44px}.adjc{min-height:84px}
+  .grow{grid-template-columns:1fr 1fr}.rail{display:none}.grow .tile{container-type:normal}.grow .val .n{font-size:44px}.adjc{min-height:84px}
   .stats,.bigstats{grid-template-columns:1fr 1fr}
   .run-screen,.plan-screen,.sum-screen{grid-template-rows:none}
   .chartpanel{min-height:170px}
@@ -383,19 +390,22 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="banner" id="banner">—</div>
       <div class="nextcard"><span class="lbl">Next up</span><b id="nxl">—</b><span class="nv" id="nxv"></span></div>
     </div>
-    <div class="grow">
+    <div class="grow r1">
+      <div class="rail" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2M9.5 3h5"/></svg></div>
       <div class="tile val"><div class="lbl">Remaining</div><div class="n"><span id="rem">0:00</span></div><div class="u"><span>workout</span></div></div>
       <div class="tile val blk"><div class="lbl" id="blkno">Block</div><div class="n"><span id="blockrem">0:00</span></div><div class="bar" id="blkbar"><i id="ring"></i></div></div>
       <div class="tile val"><div class="lbl">Elapsed</div><div class="n"><span id="el">0:00</span></div><div class="u"><span id="eltot">&nbsp;</span></div></div>
       <div class="nextcard fuelcard idle" id="fuelcard" role="button"><span class="lbl" id="fxt">Fuel</span><b id="fxl">no plan</b><span class="nv" id="fxv"></span></div>
     </div>
-    <div class="grow">
+    <div class="grow r2">
+      <div class="rail" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg></div>
       <div class="tile val pc"><div class="lbl">Pace</div><div class="n"><span id="vp">–</span><small>min/km</small></div><div class="u"><span id="pp"></span></div></div>
       <div class="tile val sp"><div class="lbl">Speed</div><div class="n"><span id="vs">–</span><small>km/h</small></div><div class="u"><span id="ps"></span></div></div>
       <div class="tile val"><div class="lbl">Distance</div><div class="n"><span id="dist">0.00</span><small>km</small></div><div class="u"><span>&nbsp;</span></div></div>
       <div class="adjc"><button data-a="s-0.1" aria-label="Speed minus 0.1 (hold for 0.5 steps)">−0.1</button><button class="pri" data-a="s+0.1" aria-label="Speed plus 0.1 (hold for 0.5 steps)">+0.1</button></div>
     </div>
-    <div class="grow">
+    <div class="grow r3">
+      <div class="rail" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 19l6-11 4 7 2-3 6 7z"/></svg><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></div>
       <div class="tile val in"><div class="lbl">Incline</div><div class="n"><span id="vi">–</span><small>%</small></div><div class="u"><span id="pi"></span></div></div>
       <div class="tile val"><div class="lbl">Elevation gain</div><div class="n">+<span id="vert">0</span><small>m</small></div><div class="u"><span>&nbsp;</span></div></div>
       <div class="tile val hr"><div class="lbl">Heart rate</div><div class="n"><span id="hrv">–</span><small>bpm</small></div><div class="u"><span class="zc" id="hrz" hidden></span><span id="hrzp">&nbsp;</span></div></div>
