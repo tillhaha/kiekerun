@@ -54,10 +54,11 @@ change `MCP_TOKEN` if it leaks. Without `MCP_TOKEN` the route answers 404.
 |---|---|
 | `get_activities(oldest?, newest?, limit?)` | activities of all sources, newest first: distance, duration, pace, HR, elevation, load, RPE, feel, carbs, notes, source device |
 | `get_activity(id)` | one activity with intervals/laps and HR zone times |
+| `get_activity_streams(id, step_s?, start_s?, end_s?)` | heart rate over time (plus speed km/h, grade %) as rows `[t_s, hr, speed_kmh, grade_pct]`, averaged per `step_s` seconds (default 30, max 600 rows); `start_s`/`end_s` zoom into one block |
 | `get_wellness(oldest?, newest?)` | CTL, ATL, form (TSB), ramp rate, HRV, resting HR, sleep, readiness, weight |
 | `get_plan_vs_actual(oldest?, newest?)` | per day: planned entries next to done activities; planned workouts marked done / open / no paired activity |
 
-Dates are `YYYY-MM-DD`, default is the last 14 days, maximum range 400 days. These four tools only read.
+Dates are `YYYY-MM-DD`, default is the last 14 days, maximum range 400 days. These tools only read.
 
 ### Writing (optional, `MCP_ALLOW_WRITE=1`)
 

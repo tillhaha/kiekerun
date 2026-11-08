@@ -136,6 +136,16 @@ class IntervalsClient:
         return self._request("GET", f"{self.base_url}/activity/{activity_id}", f"/activity/{activity_id}",
                              params={"intervals": "true" if intervals else "false"}) or {}
 
+    def get_streams(self, activity_id: str, types: str) -> list[dict]:
+        """Time series of one activity (time, heartrate, velocity_smooth, ...), a list of {type, data}."""
+        path = f"/activity/{activity_id}/streams"
+        try:
+            return self._request("GET", f"{self.base_url}{path}", path, params={"types": types}) or []
+        except IntervalsError as exc:
+            if exc.status != 404:
+                raise
+            return self._request("GET", f"{self.base_url}{path}.json", path + ".json", params={"types": types}) or []
+
     def list_wellness(self, oldest: str, newest: str) -> list[dict]:
         return self._list_with_json_fallback("/wellness", {"oldest": oldest, "newest": newest})
 

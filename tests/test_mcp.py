@@ -71,7 +71,7 @@ def test_initialize_list_ping_and_notification(mk):
     assert r["protocolVersion"] == "2025-03-26" and r["capabilities"] == {"tools": {}}
     assert rpc(c, "initialize", {"protocolVersion": "1999"}).json()["result"]["protocolVersion"] == "2025-06-18"
     names = [t["name"] for t in rpc(c, "tools/list").json()["result"]["tools"]]
-    assert names == ["get_activities", "get_activity", "get_wellness", "get_zones", "get_planned_workout", "get_season_plan", "get_plan_vs_actual"]
+    assert names == ["get_activities", "get_activity", "get_activity_streams", "get_wellness", "get_zones", "get_planned_workout", "get_season_plan", "get_plan_vs_actual"]
     assert rpc(c, "ping").json()["result"] == {}
     assert rpc(c, "notifications/initialized", id_=None).status_code == 202
     assert rpc(c, "nope").json()["error"]["code"] == -32601
@@ -104,6 +104,32 @@ def test_get_activity_detail_has_intervals(mk):
     out = json.loads(rpc(c, "tools/call", {"name": "get_activity", "arguments": {"id": "i1"}}).json()["result"]["content"][0]["text"])
     assert out["intervals"][0]["pace_min_km"] == "5:20" and out["hr_zone_times_s"] == [10, 20, 30]
     assert http.calls[0][2] == {"intervals": "true"}
+
+
+def test_get_activity_streams_downsamples_hr(mk):
+    n = 125
+    streams = [{"type": "time", "data": list(range(n))},
+               {"type": "heartrate", "data": [100 + i // 5 if not 60 <= i < 70 else 0 for i in range(n)]},
+               {"type": "velocity_smooth", "data": [2.5] * n}, {"type": "grade_smooth", "data": [1.0] * n}]
+    c, http = mk({"/activity/i1/streams": Resp(200, streams)})
+    out = json.loads(rpc(c, "tools/call", {"name": "get_activity_streams", "arguments": {"id": "i1", "step_s": 30}}).json()["result"]["content"][0]["text"])
+    assert out["columns"] == ["t_s", "hr", "speed_kmh", "grade_pct"] and out["step_s"] == 30
+    assert [r[0] for r in out["rows"]] == [0, 30, 60, 90, 120]
+    assert out["rows"][0][1:] == [102, 9.0, 1.0] and out["rows"][2][1] is not None  # gap ignored, rest of bucket averaged
+    assert http.calls[0][2] == {"types": "time,heartrate,velocity_smooth,grade_smooth"}
+    z = json.loads(rpc(c, "tools/call", {"name": "get_activity_streams", "arguments": {"id": "i1", "start_s": 30, "end_s": 60}}).json()["result"]["content"][0]["text"])
+    assert z["rows"][0][0] == 30 and z["rows"][-1][0] <= 60
+
+
+def test_get_activity_streams_limits_and_errors(mk):
+    n = 20000
+    c, _ = mk({"/activity/i1/streams": Resp(200, [{"type": "time", "data": list(range(n))}, {"type": "heartrate", "data": [140] * n}])})
+    out = json.loads(rpc(c, "tools/call", {"name": "get_activity_streams", "arguments": {"id": "i1", "step_s": 5}}).json()["result"]["content"][0]["text"])
+    assert len(out["rows"]) <= 601 and out["step_s"] >= 35  # step raised to stay under 600 rows
+    for args in ({"id": "../x"}, {"id": "i1", "step_s": 2}, {"id": "i1", "start_s": 50, "end_s": 10}):
+        assert rpc(c, "tools/call", {"name": "get_activity_streams", "arguments": args}).json()["result"]["isError"], args
+    c2, _ = mk({"/activity/i1/streams": Resp(200, [{"type": "time", "data": [0, 1]}])})
+    assert rpc(c2, "tools/call", {"name": "get_activity_streams", "arguments": {"id": "i1"}}).json()["result"]["isError"]
 
 
 def test_get_wellness_computes_form(mk):

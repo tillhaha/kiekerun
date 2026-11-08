@@ -1,6 +1,6 @@
 """Read-only MCP server (Streamable HTTP, stateless JSON) that lets the coach read intervals.icu.
 
-Read tools:  get_activities, get_activity, get_wellness, get_plan_vs_actual.
+Read tools:  get_activities, get_activity, get_activity_streams, get_wellness, get_plan_vs_actual.
 Write tools (only when MCP_ALLOW_WRITE=1): save_treadmill_workout, save_planned_workout,
 save_note, delete_planned_workout, delete_note. They only touch planned WORKOUT entries and
 NOTE markers in the calendar; they cannot change activities, wellness data or races, and
@@ -19,8 +19,8 @@ from datetime import timedelta
 from typing import Callable
 
 from server.ratelimit import RateLimiter
-from tcoach.coach_data import (ACTIVITY_FIELDS, SEASON_CATEGORIES, parse_day, plan_vs_actual, resolve_range, summarize_activity,
-                               summarize_activity_detail, summarize_season, summarize_wellness, summarize_workout_doc, summarize_zones)
+from tcoach.coach_data import (ACTIVITY_FIELDS, SEASON_CATEGORIES, STREAM_TYPES, parse_day, plan_vs_actual, resolve_range, summarize_activity,
+                               summarize_activity_detail, summarize_season, summarize_streams, summarize_wellness, summarize_workout_doc, summarize_zones)
 from tcoach.intervals_client import IntervalsClient, IntervalsError, slug
 from tcoach.intervals_text import to_intervals_text
 from tcoach.machine import has_errors, validate
@@ -42,6 +42,15 @@ TOOLS = [
     {"name": "get_activity",
      "description": "One activity in detail incl. intervals/laps and HR zone times. Use the id from get_activities.",
      "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}},
+    {"name": "get_activity_streams",
+     "description": "Heart rate over time (plus speed km/h and grade %) of one activity, averaged per step_s seconds, as rows "
+                    "[t_s, hr, speed_kmh, grade_pct]. Use it to see drift, recovery between blocks or HR per treadmill block "
+                    "instead of only the block average from get_activity. Optional window start_s..end_s (seconds from start) "
+                    "to zoom into one block. Up to 600 rows; the step is raised automatically for long activities.",
+     "inputSchema": {"type": "object", "required": ["id"], "properties": {
+         "id": {"type": "string"},
+         "step_s": {"type": "integer", "minimum": 5, "maximum": 600, "description": "Seconds per row (default 30)"},
+         "start_s": {"type": "integer", "minimum": 0}, "end_s": {"type": "integer", "minimum": 1}}}},
     {"name": "get_wellness",
      "description": "Daily fitness and wellness: CTL, ATL, form (TSB), ramp rate, HRV, resting HR, sleep, readiness, weight, steps.",
      "inputSchema": {"type": "object", "properties": _RANGE}},
@@ -275,6 +284,20 @@ def call_tool(name: str, args: dict, cl: IntervalsClient, today: str, allow_writ
             if not aid or "/" in aid or len(aid) > 40:
                 raise ValueError("id is required")
             return _text(summarize_activity_detail(cl.get_activity(aid)))
+        if name == "get_activity_streams":
+            aid = str(args.get("id") or "").strip()
+            if not aid or "/" in aid or len(aid) > 40:
+                raise ValueError("id is required")
+            ints = {}
+            for k, dflt, lo in (("step_s", 30, 5), ("start_s", 0, 0), ("end_s", None, 1)):
+                v = args.get(k, dflt)
+                if v is not None and (isinstance(v, bool) or not isinstance(v, int) or v < lo or v > 86400):
+                    raise ValueError(f"{k} must be a whole number of seconds >= {lo}")
+                ints[k] = v
+            out = summarize_streams(cl.get_streams(aid, STREAM_TYPES), ints["step_s"], ints["start_s"], ints["end_s"])
+            if "error" in out:
+                raise ValueError(out["error"])
+            return _text({"activity_id": aid, **out})
         if name == "get_wellness":
             oldest, newest = resolve_range(args, today)
             rows = [summarize_wellness(w) for w in cl.list_wellness(oldest, newest)]

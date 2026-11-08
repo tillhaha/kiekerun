@@ -5,6 +5,7 @@ Everything here is pure (no network) so it can be tested with plain dicts.
 """
 from __future__ import annotations
 
+import math
 from datetime import date, datetime, timedelta
 
 MAX_RANGE_DAYS = 400
@@ -113,6 +114,54 @@ def summarize_activity_detail(a: dict) -> dict:
     if zt:
         out["hr_zone_times_s"] = zt
     return out
+
+
+STREAM_TYPES = "time,heartrate,velocity_smooth,grade_smooth"
+MAX_STREAM_ROWS = 600
+
+
+def summarize_streams(streams, step_s: int = 30, start_s: int = 0, end_s: int | None = None) -> dict:
+    """Downsample intervals.icu streams to one row per step_s seconds: [t_s, hr, speed_kmh, grade_pct].
+
+    Values are averaged per bucket (missing/zero HR is ignored, so signal gaps give hr=null).
+    If the window would need more than MAX_STREAM_ROWS rows the step is raised and reported."""
+    by = {s.get("type"): s.get("data") or [] for s in (streams or []) if isinstance(s, dict)}
+    hr = by.get("heartrate") or []
+    n = len(hr)
+    if not n:
+        return {"error": "this activity has no heart-rate stream"}
+    t = by.get("time") or list(range(n))
+    spd, grd = by.get("velocity_smooth") or [], by.get("grade_smooth") or []
+    t0 = t[0] if t else 0
+    last = (t[min(n, len(t)) - 1] - t0) if t else 0
+    end = last if end_s is None else min(end_s, last)
+    if end <= start_s:
+        raise ValueError("empty window: end_s must be greater than start_s")
+    step = max(5, int(step_s))
+    if (end - start_s) / step > MAX_STREAM_ROWS:
+        step = int(math.ceil((end - start_s) / MAX_STREAM_ROWS / 5.0) * 5)
+    buckets: dict[int, list] = {}
+    for i in range(min(n, len(t))):
+        ts = t[i] - t0
+        if ts < start_s or ts > end:
+            continue
+        b = int((ts - start_s) // step)
+        h, v, g = hr[i], spd[i] if i < len(spd) else None, grd[i] if i < len(grd) else None
+        cell = buckets.setdefault(b, [[], [], []])
+        if isinstance(h, (int, float)) and h > 0:
+            cell[0].append(h)
+        if isinstance(v, (int, float)):
+            cell[1].append(v * 3.6)
+        if isinstance(g, (int, float)):
+            cell[2].append(g)
+
+    def avg(xs, nd):
+        return round(sum(xs) / len(xs), nd) if xs else None
+
+    rows = [[start_s + b * step, (int(round(sum(c[0]) / len(c[0]))) if c[0] else None), avg(c[1], 1), avg(c[2], 1)] for b, c in sorted(buckets.items())]
+    hrs = [h for h in hr if isinstance(h, (int, float)) and h > 0]
+    return {"columns": ["t_s", "hr", "speed_kmh", "grade_pct"], "step_s": step, "start_s": start_s, "end_s": end,
+            "hr_avg": avg(hrs, 0), "hr_max": max(hrs) if hrs else None, "rows": rows}
 
 
 def summarize_wellness(w: dict) -> dict:

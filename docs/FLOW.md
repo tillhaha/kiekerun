@@ -107,6 +107,8 @@ Outdoor-Einheiten laufen ohne KiekeRun: Kalender, Garmin Connect, Uhr, und die A
    |    Ruhepuls, Schlaf          |                              |
    |-- get_activity(id) --------->|-- GET /activity/{id} ------->|
    |<-- Intervalle, HR-Zonen -----|                              |
+   |-- get_activity_streams(id) ->|-- GET /activity/{id}/streams>|
+   |<-- Puls/Speed/Steigung ------|   (Zeitreihe, je step_s)     |
    |                              |                              |
    |  Auswertung -> nächste Einheit planen (zurück zu Schritt 1)
 ```
