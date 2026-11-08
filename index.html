@@ -100,6 +100,7 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .c-hr{fill:none;stroke:var(--hrline);stroke-width:2.5;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
 .hrleg{position:absolute;right:8px;top:5px;font:600 12px var(--ft);letter-spacing:.06em;color:var(--hrline);pointer-events:none}
 .c-band{fill:color-mix(in srgb,var(--highlight) 24%,transparent)}
+.c-band.fut{fill:color-mix(in srgb,var(--highlight) 7%,transparent);stroke:var(--highlight);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
 .mk{position:absolute;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:var(--chart-bg);border:2.5px solid var(--hrline);box-sizing:border-box}
 .mv{position:absolute;font:700 15px var(--fd);color:var(--ink);transform:translate(-50%,-135%);font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
 .mv.b{transform:translate(-50%,45%)}
@@ -676,8 +677,9 @@ function hrchart(blocks,hr,tot,o={}){
  let bands=[];
  if(ZN)for(const b of blocks){const z=zoneOfLabel(b.label);if(!z||b.dur<75)continue;const l=bands[bands.length-1];
   if(l&&l.z===z&&Math.abs(l.t1-b.t0)<1)l.t1=b.t0+b.dur;else bands.push({z,t0:b.t0,t1:b.t0+b.dur})}
- const rects=bands.map(r=>{const a=r.z>1?ZN[r.z-2]+1:lo,c=ZN[r.z-1],y0=Y(c),y1=Y(a);
-  return `<rect class="c-band" x="${(X(r.t0)*10).toFixed(1)}" y="${y0.toFixed(1)}" width="${((r.t1-r.t0)/tot*1000).toFixed(1)}" height="${Math.max(0,y1-y0).toFixed(1)}"/>`}).join("");
+ const rects=bands.map(r=>{const a=r.z>1?ZN[r.z-2]+1:lo,c=ZN[r.z-1],y0=Y(c),y1=Y(a),h=Math.max(0,y1-y0).toFixed(1);
+  const piece=(t0,t1,cl)=>t1>t0?`<rect class="${cl}" x="${(X(t0)*10).toFixed(1)}" y="${y0.toFixed(1)}" width="${((t1-t0)/tot*1000).toFixed(1)}" height="${h}"/>`:"";
+  return piece(r.t0,Math.min(r.t1,now),"c-band")+piece(Math.max(r.t0,now),r.t1,"c-band fut")}).join("");
  let d="",pt=-99;for(const [t,b] of hr){d+=(t-pt>5?"M":"L")+(t/tot*1000).toFixed(1)+" "+Y(b).toFixed(1);pt=t}
  const mk=hrMarks(blocks,hr,tot,now).map(([t,v])=>{const y=Y(v);return `<i class="mk" style="left:${X(t).toFixed(2)}%;top:${y.toFixed(1)}%"></i><b class="mv${y<16?" b":""}" style="left:${X(t).toFixed(2)}%;top:${y.toFixed(1)}%">${v}</b>`}).join("");
  const grid=[25,50,75].map(y=>`<line class="g" x1="0" x2="1000" y1="${y}" y2="${y}"/>`).join("");
