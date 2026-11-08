@@ -99,6 +99,12 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .c-spd{fill:none;stroke:var(--speed);stroke-width:3;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 .c-hr{fill:none;stroke:var(--hrline);stroke-width:2.5;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
 .hrleg{position:absolute;right:8px;top:5px;font:600 12px var(--ft);letter-spacing:.06em;color:var(--hrline);pointer-events:none}
+.c-band{fill:color-mix(in srgb,var(--highlight) 24%,transparent)}
+.mk{position:absolute;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:var(--chart-bg);border:2.5px solid var(--hrline);box-sizing:border-box}
+.mv{position:absolute;font:700 15px var(--fd);color:var(--ink);transform:translate(-50%,-135%);font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
+.mv.b{transform:translate(-50%,45%)}
+.bks{display:flex;gap:2px;margin:0 34px;height:20px;flex:none}
+.bks span{background:var(--surface-2);font:600 11px var(--ft);letter-spacing:.03em;color:var(--muted);padding:2px 6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border-radius:2px;min-width:0}
 .c-plan{fill:none;stroke:var(--chart-ink);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
 .playhead{position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;background:var(--alert);left:0}
 .pw{position:relative;margin:0 34px;display:flex;flex-direction:column;flex:none}
@@ -167,7 +173,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 [data-theme="volt"] .dot{background:var(--ink);box-shadow:0 0 0 3px var(--highlight)}
 
 /* ---------- 2 · Run ---------- */
-.run-screen{grid-template-rows:auto repeat(3,minmax(0,1fr)) minmax(160px,.8fr)}
+.run-screen{grid-template-rows:auto repeat(3,minmax(0,1fr)) minmax(210px,1.5fr)}
 .toprow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:12px}
 .banner{display:flex;align-items:center;gap:16px;min-height:72px;padding:10px 24px;border-radius:var(--r);background:var(--surface);color:var(--ink);
   font:700 clamp(24px,3.6vw,42px)/1.05 var(--fd);letter-spacing:.03em;text-transform:uppercase;font-style:var(--num-style);transition:background .15s}
@@ -657,10 +663,34 @@ function stepPts(segs,tot,fy){let x=0,p=[];segs.forEach(g=>{const w=g.dur/tot*10
 let chartN=0;const HRLO=80,HRHI=180;
 const hrY=b=>(100-(Math.min(HRHI,Math.max(HRLO,b))-HRLO)/(HRHI-HRLO)*100).toFixed(1);
 function hrPath(hr,tot){let d="",pt=-99;for(const [t,b] of hr){d+=(t-pt>5?"M":"L")+(t/tot*1000).toFixed(1)+" "+hrY(b);pt=t}return d}
-/* HR line of the running workout: fixed 80-180 bpm scale on the chart height, a gap in the signal breaks the line */
-function drawHr(){const p=$("tl").querySelector(".c-hr");if(!p||!S||!S.hr.length)return;const [t,b]=S.hr[S.hr.length-1];
- if(S.hr.length===1){S.hd="";S.hp=-99}
- S.hd+=(t-S.hp>5?"M":"L")+(t/S.end*1000).toFixed(1)+" "+hrY(b);S.hp=t;p.setAttribute("d",S.hd)}
+/* ---- HR-centred chart (run screen + summary): HR line, target-zone band per block, markers, block strip */
+function zoneOfLabel(l){const m=/\bZ([1-5])\b/i.exec(l||"");return m?+m[1]:0}
+function hrMarks(blocks,hr,tot,now){
+ const avg=(a,b)=>{const v=hr.filter(x=>x[0]>a&&x[0]<=b).map(x=>x[1]);return v.length>=20?Math.round(v.reduce((s,x)=>s+x,0)/v.length):null},out=[];
+ if(blocks.length>=5){for(const b of blocks){const e=b.t0+b.dur;if(b.dur<120||e>now)continue;const v=avg(e-60,e);if(v!=null)out.push([e,v])}}
+ else{const st=tot<=3600?300:tot<=7200?600:900;for(let t=st;t<=now&&t<=tot;t+=st){const v=avg(t-st,t);if(v!=null)out.push([t,v])}}
+ return out}
+function hrchart(blocks,hr,tot,o={}){
+ const vals=hr.map(x=>x[1]),lo=vals.length&&Math.min(...vals)<100?60:100,hi=Math.max(180,vals.length?Math.ceil((Math.max(...vals)+5)/10)*10:0),
+  Y=b=>(100-(Math.min(hi,Math.max(lo,b))-lo)/(hi-lo)*100),now=o.now==null?tot:o.now,X=t=>t/tot*100;
+ let bands=[];
+ if(ZN)for(const b of blocks){const z=zoneOfLabel(b.label);if(!z||b.dur<75)continue;const l=bands[bands.length-1];
+  if(l&&l.z===z&&Math.abs(l.t1-b.t0)<1)l.t1=b.t0+b.dur;else bands.push({z,t0:b.t0,t1:b.t0+b.dur})}
+ const rects=bands.map(r=>{const a=r.z>1?ZN[r.z-2]+1:lo,c=ZN[r.z-1],y0=Y(c),y1=Y(a);
+  return `<rect class="c-band" x="${(X(r.t0)*10).toFixed(1)}" y="${y0.toFixed(1)}" width="${((r.t1-r.t0)/tot*1000).toFixed(1)}" height="${Math.max(0,y1-y0).toFixed(1)}"/>`}).join("");
+ let d="",pt=-99;for(const [t,b] of hr){d+=(t-pt>5?"M":"L")+(t/tot*1000).toFixed(1)+" "+Y(b).toFixed(1);pt=t}
+ const mk=hrMarks(blocks,hr,tot,now).map(([t,v])=>{const y=Y(v);return `<i class="mk" style="left:${X(t).toFixed(2)}%;top:${y.toFixed(1)}%"></i><b class="mv${y<16?" b":""}" style="left:${X(t).toFixed(2)}%;top:${y.toFixed(1)}%">${v}</b>`}).join("");
+ const grid=[25,50,75].map(y=>`<line class="g" x1="0" x2="1000" y1="${y}" y2="${y}"/>`).join("");
+ const yl=`<div class="yl l">`+[0,25,50,75].map(y=>`<span${y?"":' class="t"'} style="top:${y}%">${Math.round((hi-(hi-lo)*y/100)/5)*5}</span>`).join("")+`<span class="u">bpm</span></div>`;
+ const st=niceStep(tot);let xl="";for(let t=0;t<=tot;t+=st)xl+=`<span style="left:${t/tot*100}%">${fmt(t)}</span>`;
+ const zr=z=>z>1?(ZN[z-2]+1)+"–"+ZN[z-1]+" bpm":"≤"+ZN[0]+" bpm";
+ const strip=blocks.map(b=>`<span style="flex:${Math.max(b.dur,1)}" title="${b.label}">${b.dur/tot>.07?b.label+(ZN&&zoneOfLabel(b.label)?" · "+zr(zoneOfLabel(b.label)):"")+(b.speed!=null?" · "+(+b.speed).toFixed(1):""):""}</span>`).join("");
+ const cap=blocks.length>=5?"HR · avg of last 60 s per block":"HR · avg per "+(tot<=3600?5:tot<=7200?10:15)+" min";
+ return `<div class="chartbox${o.fill?" fill":""}" style="--ch:${o.h||150}px"><div class="pw">${yl}<div class="plot"><svg viewBox="0 0 1000 100" preserveAspectRatio="none">${grid}${rects}<path class="c-hr" d="${d}"/></svg>${mk}<div class="hrleg">${cap}</div>${o.playhead?`<div class="playhead" style="left:${(now/tot*100).toFixed(2)}%"></div>`:""}</div></div><div class="bks">${strip}</div><div class="xl">${xl}</div></div>`}
+function renderRunChart(){if(S)$("tl").innerHTML=hrchart(B,S.hr,S.end,{now:Math.min(elapsed(),S.end),playhead:true,fill:true})}
+let ZN=null,ZNP=null;
+function loadZones(){if(ZN)return Promise.resolve(true);return ZNP||(ZNP=API("/api/zones").then(z=>{ZNP=null;if(z&&Array.isArray(z.hr_zones)&&z.hr_zones.length===5){ZN=z.hr_zones;return true}return false}).catch(()=>{ZNP=null;return false}))}
+loadZones();
 function chart(segs,tot,o={}){const pl=o.planned||[];
  const mi=Math.max(0,...segs.map(g=>g.incline),...pl.map(g=>g.incline)),iMax=Math.min(40,Math.max(8,Math.ceil((mi+1)/4)*4)),
   ms=Math.max(1,...segs.map(g=>g.speed),...pl.map(g=>g.speed)),sMax=Math.max(4,Math.ceil((ms+.5)/4)*4),H=100;
@@ -691,7 +721,9 @@ function renderSummary(log,e,km,plan){const PB=plan||B;const ev=log.events,segs=
  $("dsum").innerHTML=big("Time",fmt(e))+big("Distance",km.toFixed(2),"km")+big("Elevation gain","+"+Math.round(vt),"m")+big("Avg speed",(km/(Math.max(e,1)/3600)).toFixed(1),"km/h");
  const hs=(log.hr||[]).map(x=>x[1]),hv=hs.length?`<span>Avg HR<b>${Math.round(hs.reduce((a,b)=>a+b,0)/hs.length)} bpm</b></span><span>Max HR<b>${Math.max(...hs)} bpm</b></span>`:"";
  $("dsum2").innerHTML=`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`+hv+mv;
- $("dchart").innerHTML=chart(segs,tot,{planned:pl,fill:true,hrData:(log.hr||[]).length?log.hr:null})}
+ const hrd=log.hr||[],blk=PB.map(b=>({label:b.label,t0:b.t0,dur:b.dur,speed:b.speed}));
+ const draw=()=>{$("dchart").innerHTML=(hrd.length?`<div class="lbl">Heart rate</div>`+hrchart(blk,hrd,tot,{h:190})+`<div class="lbl" style="margin-top:10px">Speed and incline, planned vs actual</div>`:"")+chart(segs,tot,{planned:pl,h:hrd.length?110:150})};
+ draw();if(hrd.length&&!ZN)loadZones().then(ok=>ok&&draw())}
 // ---- run archive: browser copy (localStorage) + server database (SQLite)
 const RUNKEY="tc_runs",RANK={recording:0,finished:1,uploaded:2};let RUNS_SRV=false,svBusy=false,svPend=null;
 const rid=l=>"kiekerun-"+String(l.started_at).replace(/[-:]/g,"").slice(0,15);
@@ -741,9 +773,9 @@ $("start").onclick=()=>{try{localStorage.setItem("tc_json",$("json").value)}catc
  try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(l=>wl=l).catch(()=>{})}catch(e){}
  S={hr:[],t0:Date.now(),started:new Date().toISOString(),pausedMs:0,paused:false,skip:0,idx:-1,events:[],alerted:-1,fz:FUEL.map(f=>({...f,st:0})),fa:-1,fp:-1,fl:0,lead:+$("lead").value||10,speed:B[0].speed,incline:B[0].incline,end:B.reduce((a,b)=>a+b.dur,0)};
  if(FUEL.length)fuelTick(0);else{$("fuelcard").className="nextcard fuelcard idle";$("fxt").textContent="Fuel";$("fxl").textContent="no plan";$("fxv").textContent=""}
- if(!ZN)API("/api/zones").then(z=>{if(z&&Array.isArray(z.hr_zones)&&z.hr_zones.length===5)ZN=z.hr_zones}).catch(()=>{});
+ loadZones().then(ok=>ok&&renderRunChart());
  show("run");$("pause").textContent="Pause";$("stop").disabled=true;$("stop").className="ghost";
- $("tl").innerHTML=chart(B.map(b=>({dur:b.dur,speed:b.speed,incline:b.incline})),S.end,{playhead:true,fill:true,hr:true});
+ renderRunChart();
  BLE.live={};
  if(BLE.on()){S.hold=true;$("banner").className="banner soon";$("banner").textContent="Starting treadmill…";
   BLE.begin(B[0].speed,B[0].incline).then(()=>{
@@ -767,7 +799,7 @@ function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){fi
  $("prog").style.width=(e/S.end*100)+"%";$("el").textContent=fmt(e);$("eltot").textContent="of "+fmt(S.end);$("rem").textContent=fmt(S.end-e);
  $("vert").textContent=Math.round(vertOf(S.events,e));$("dist").textContent=distOf(S.events,e).toFixed(2);
  $("mach").textContent=BLE.cp?`${BLE.live.dist??"–"} m · +${BLE.live.asc??"–"} m`:"not connected";
- const ph=$("tl").querySelector(".playhead");if(ph)ph.style.left=(e/S.end*100)+"%";const cr=$("tl").querySelector(".cliprect");if(cr)cr.setAttribute("width",(e/S.end*1000).toFixed(1));
+ if(Date.now()-(S.cr||0)>2000){S.cr=Date.now();renderRunChart()}else{const ph=$("tl").querySelector(".playhead");if(ph)ph.style.left=(e/S.end*100)+"%"}
  $("ring").style.width=(100*(1-Math.max(0,rem)/b.dur))+"%";$("blkno").textContent="Block "+(i+1)+" / "+B.length}
 // ---- fuel plan: reminders in workout time (pauses don't count); tap the card to log it as taken
 function fuelTick(e){const F=S&&S.fz;if(!F||!F.length)return;
@@ -785,7 +817,6 @@ function fuelTick(e){const F=S&&S.fz;if(!F||!F.length)return;
 $("fuelcard").onclick=()=>{if(!S||S.paused||S.hold||!S.fz)return;const e=elapsed(),k=S.fz.findIndex(f=>f.st===0);if(k<0)return;const f=S.fz[k];if(f.at-e>30)return;
  f.st=1;if(f.c){FB.carbs.push([Math.round(e),f.c]);fbChanged()}fuelTick(e)};
 function pace(kmh){if(!(kmh>0))return"–";const t=Math.round(3600/kmh);return Math.floor(t/60)+":"+String(t%60).padStart(2,"0")}
-let ZN=null;
 function zoneOf(b){for(let i=0;i<ZN.length;i++)if(b<=ZN[i])return i+1;return ZN.length}
 function zoneTxt(z){return"Z"+z+" "+(z>1?(ZN[z-2]+1)+"–"+ZN[z-1]:"≤"+ZN[0])}
 function hrChip(b){const c=$("hrz");if(!ZN||b==null){c.hidden=true;return}
@@ -794,7 +825,7 @@ function hrChip(b){const c=$("hrz");if(!ZN||b==null){c.hidden=true;return}
  else{c.className="zc";c.textContent="Z"+z}}
 function hrLoop(){if(!S)return;const b=hrNow();$("hrv").textContent=b??"–";hrChip(b);
  if(HR.want&&HR.dev&&HR.dev.gatt.connected&&!S.hold&&!S.paused){if(b==null){S.hrGap=(S.hrGap||0)+1;if(S.hrGap===10)BLE.st("No heart-rate signal from the strap.",true,"hrgap")}else{if(S.hrGap>=10)BLE.clr("hrgap");S.hrGap=0}}
- if(b!=null&&!S.paused&&!S.hold){const t=Math.round(elapsed()),l=S.hr[S.hr.length-1];if(!l||l[0]!==t){S.hr.push([t,b]);drawHr()}}
+ if(b!=null&&!S.paused&&!S.hold){const t=Math.round(elapsed()),l=S.hr[S.hr.length-1];if(!l||l[0]!==t){S.hr.push([t,b])}}
  if(!S.hold&&Date.now()-(S.sv||0)>10000){S.sv=Date.now();persistRun(mkLog(Math.min(elapsed(),S.end)),"recording")}}
 function distOf(ev,end){let km=0;for(let k=0;k<ev.length;k++){const t1=k+1<ev.length?ev[k+1].t:end;km+=ev[k].speed*Math.max(0,t1-ev[k].t)/3600}return km}
 function vertOf(ev,end){let up=0;for(let k=0;k<ev.length;k++){const t1=k+1<ev.length?ev[k+1].t:end,dt=Math.max(0,t1-ev[k].t);if(ev[k].incline>0)up+=rise(ev[k].speed*dt/3600,ev[k].incline)}return up}
