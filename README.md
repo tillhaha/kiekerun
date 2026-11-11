@@ -40,6 +40,8 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 Endpoints were checked against https://intervals.icu/api/v1/docs.
 
 ## Run archive
+**Free run:** the plan screen has a "Free run" button. No plan is loaded; the treadmill starts at 3.0 km/h / 0 % and you steer with the big speed and incline buttons (speed 1-22 km/h, incline -6..40 %). The run screen shows average speed and average HR instead of remaining time; the run is recorded, saved and uploaded like any other.
+
 A treadmill run is no longer lost with the tab. While it is recorded the page saves it every 10 s, in the browser (`localStorage`, last 6 runs) and in the server database; the finished run stays there until `/api/upload` succeeded, which marks it uploaded. The plan screen lists the 3 newest under "Saved runs" (Interrupted / Not uploaded / Uploaded); a tap opens the summary with the normal upload button, also from another device if the server database is on. Status only moves forward (recording, finished, uploaded), a late autosave never overwrites a finished run. The archive is not a backup: keep uploading to intervals.icu.
 
 ## Coach connector (read-only MCP)

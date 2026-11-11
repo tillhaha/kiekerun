@@ -346,6 +346,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="card loadcol">
         <h2 class="lbl">Load workout</h2>
         <button class="pri" id="todaybtn">Today's workout</button>
+        <div class="recent"><button id="freebtn" type="button"><b>Free run</b> · no plan, you set speed and incline</button></div>
         <div class="muted" id="todaymsg" hidden></div>
         <div class="recent" id="todaylist"></div>
         <h2 class="lbl">Examples</h2>
@@ -389,7 +390,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     </div>
     <div class="grow r1">
       <div class="rail" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2M9.5 3h5"/></svg></div>
-      <div class="tile val"><div class="lbl">Remaining</div><div class="n"><span id="rem">0:00</span></div><div class="u"><span>workout</span></div></div>
+      <div class="tile val"><div class="lbl" id="lrem">Remaining</div><div class="n"><span id="rem">0:00</span></div><div class="u"><span id="urem">workout</span></div></div>
       <div class="tile val blk"><div class="lbl" id="blkno">Block</div><div class="n"><span id="blockrem">0:00</span></div><div class="bar" id="blkbar"><i id="ring"></i></div></div>
       <div class="tile val"><div class="lbl">Elapsed</div><div class="n"><span id="el">0:00</span></div><div class="u"><span id="eltot">&nbsp;</span></div></div>
       <div class="nextcard fuelcard idle" id="fuelcard" role="button"><span class="lbl" id="fxt">Fuel</span><b id="fxl">no plan</b><span class="nv" id="fxv"></span></div>
@@ -425,7 +426,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div id="dsum" class="bigstats"></div>
     <div id="dsum2" class="substats"></div>
     <div class="sum-body">
-      <div class="card"><h2 class="lbl">Planned vs actual</h2><div id="dchart"></div></div>
+      <div class="card"><h2 class="lbl" id="dchartt">Planned vs actual</h2><div id="dchart"></div></div>
       <div class="card">
         <h2 class="lbl">Export</h2>
         <pre id="logout" hidden></pre>
@@ -496,6 +497,11 @@ function parse(){const box=$("issues"),sum=$("sum");box.innerHTML="";sum.innerHT
  renderPreview(B);renderFuelPv(dur);$("start").disabled=is.some(i=>i[0]==="error");
  $("readytxt").textContent=$("start").disabled?"Fix the errors above to start":is.length?"Ready, with "+is.length+" warning"+(is.length>1?"s":""):"All blocks within treadmill limits"}
 $("json").oninput=()=>{PLANNED=null;parse()};
+function loadFree(){PLANNED=null;W={name:"Free run",free:true,blocks:[]};B=[{label:"Free run",t0:0,dur:86400,speed:3,incline:0}];FUEL=[];
+ $("issues").innerHTML="";$("sum").innerHTML="";$("pvtl").innerHTML="";$("pvtab").innerHTML="";$("pvfuel").hidden=true;
+ $("ctaname").textContent="Free run";$("ctanote").textContent="No plan: you set speed and incline with the big buttons on the run screen. The treadmill starts at 3.0 km/h and 0% and everything is recorded like any other run.";
+ $("readytxt").textContent="Free run ready";$("start").disabled=false}
+$("freebtn").onclick=loadFree;
 ["ex1","ex2","ex3","ex4","ex5"].forEach(k=>$(k).onclick=()=>{PLANNED=null;$("json").value=JSON.stringify(EX[k],null,1);parse();document.querySelectorAll(".recent button").forEach(b=>b.classList.toggle("sel",b.id===k))});
 document.addEventListener("dragover",e=>e.preventDefault());document.addEventListener("drop",e=>e.preventDefault());
 try{const s=localStorage.getItem("tc_json");if(s){$("json").value=s;parse()}}catch(e){}
@@ -697,17 +703,17 @@ function renderFuelPv(tot){const el=$("pvfuel");if(!FUEL.length){el.hidden=true;
  const fk=k=>FUEL.filter(f=>f.k===k).reduce((a,f)=>a+f.fl,0),g=fk("gel"),d=fk("drink");
  el.innerHTML=`<h2 class="lbl">Fuel plan</h2><div class="fsum">${[g?fnum(g)+" Gel-Flask"+(g>1?"s":""):"",d?fnum(d)+" Drink-Flask"+(d>1?"s":""):"",c?c+" g carbs":"",c&&h>=.25?Math.round(c/h)+" g/h":"",fl?fl+" ml":""].filter(Boolean).join(" · ")}</div><div class="chips">`+
   FUEL.map(f=>`<span class="chip">${fmt(f.at)}<i>${[fuelTxt(f),fuelSub(f)].filter(Boolean).join(" · ")}</i></span>`).join("")+"</div>";el.hidden=false}
-function renderSummary(log,e,km,plan){const PB=plan||B;const ev=log.events,segs=ev.map((x,k)=>({dur:Math.max(0.1,(k+1<ev.length?ev[k+1].t:e)-x.t),speed:x.speed,incline:x.incline}));
+function renderSummary(log,e,km,plan){const free=!!(log.free||(log.workout&&log.workout.free)),PB=free?[]:(plan||B);const ev=log.events,segs=ev.map((x,k)=>({dur:Math.max(0.1,(k+1<ev.length?ev[k+1].t:e)-x.t),speed:x.speed,incline:x.incline}));
  const pl=PB.map(b=>({dur:b.dur,speed:b.speed,incline:b.incline})),pt=pl.reduce((a,g)=>a+g.dur,0),tot=Math.max(pt,segs.reduce((a,g)=>a+g.dur,0)),vt=vertOf(ev,e);
  const pv=PB.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0);
  const mv=log.machine&&log.machine.ascent_m!=null?`<span>Machine ascent<b>${Math.round(log.machine.ascent_m)} m</b></span>`:"";
  const big=(l,v,u)=>`<div class="stat"><span class="lbl">${l}</span><b>${v}${u?`<small>${u}</small>`:""}</b></div>`;
- $("dname").textContent=log.name;$("ddate").textContent="Workout complete · "+new Date(log.started_at).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+ $("dchartt").textContent=free?"Run":"Planned vs actual";$("dname").textContent=log.name;$("ddate").textContent="Workout complete · "+new Date(log.started_at).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
  $("dsum").innerHTML=big("Time",fmt(e))+big("Distance",km.toFixed(2),"km")+big("Elevation gain","+"+Math.round(vt),"m")+big("Avg speed",(km/(Math.max(e,1)/3600)).toFixed(1),"km/h");
  const hs=(log.hr||[]).map(x=>x[1]),hv=hs.length?`<span>Avg HR<b>${Math.round(hs.reduce((a,b)=>a+b,0)/hs.length)} bpm</b></span><span>Max HR<b>${Math.max(...hs)} bpm</b></span>`:"";
- $("dsum2").innerHTML=`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`+hv+mv;
- const hrd=log.hr||[],blk=PB.map(b=>({label:b.label,t0:b.t0,dur:b.dur,speed:b.speed}));
- const draw=()=>{$("dchart").innerHTML=(hrd.length?`<div class="lbl">Heart rate</div>`+hrchart(blk,hrd,tot,{h:190})+`<div class="lbl" style="margin-top:10px">Speed and incline, planned vs actual</div>`:"")+chart(segs,tot,{planned:pl,h:hrd.length?110:150})};
+ $("dsum2").innerHTML=(free?"":`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`)+hv+mv;
+ const hrd=log.hr||[],blk=(free?(log.blocks||[]):PB).map(b=>({label:b.label,t0:b.t0,dur:b.dur,speed:b.speed}));
+ const draw=()=>{$("dchart").innerHTML=(hrd.length?`<div class="lbl">Heart rate</div>`+hrchart(blk,hrd,tot,{h:190})+`<div class="lbl" style="margin-top:10px">Speed and incline${free?"":", planned vs actual"}</div>`:"")+chart(segs,tot,{planned:pl,h:hrd.length?110:150})};
  draw();if(hrd.length&&!ZN)loadZones().then(ok=>ok&&draw())}
 // ---- run archive: browser copy (localStorage) + server database (SQLite)
 const RUNKEY="tc_runs",RANK={recording:0,finished:1,uploaded:2};let RUNS_SRV=false,svBusy=false,svPend=null;
@@ -752,11 +758,12 @@ function elapsed(){const now=S.paused?S.pauseAt:Date.now();return(now-S.t0-S.pau
 function curIdx(e){let i=0;while(i+1<B.length&&e>=B[i+1].t0)i++;return i}
 function logEv(){S.events.push({t:Math.round(elapsed()*10)/10,speed:S.speed,incline:S.incline})}
 function setBlockVals(i){S.speed=B[i].speed;S.incline=B[i].incline}
-$("start").onclick=()=>{try{localStorage.setItem("tc_json",$("json").value)}catch(e){}
+$("start").onclick=()=>{if(!(W&&W.free)){try{localStorage.setItem("tc_json",$("json").value)}catch(e){}}
  FB={rpe:null,feel:null,note:"",carbs:[]};LAST_LOG=null;$("fbnote").value="";renderFB();
  try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){AC=null}
  try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(l=>wl=l).catch(()=>{})}catch(e){}
- S={hr:[],t0:Date.now(),started:new Date().toISOString(),pausedMs:0,paused:false,skip:0,idx:-1,events:[],alerted:-1,fz:FUEL.map(f=>({...f,st:0})),fa:-1,fp:-1,fl:0,lead:+$("lead").value||10,speed:B[0].speed,incline:B[0].incline,end:B.reduce((a,b)=>a+b.dur,0)};
+ S={hr:[],t0:Date.now(),started:new Date().toISOString(),pausedMs:0,paused:false,skip:0,idx:-1,events:[],alerted:-1,fz:FUEL.map(f=>({...f,st:0})),fa:-1,fp:-1,fl:0,lead:+$("lead").value||10,speed:B[0].speed,incline:B[0].incline,free:!!(W&&W.free),end:(W&&W.free)?1800:B.reduce((a,b)=>a+b.dur,0)};
+ $("lrem").textContent=S.free?"Avg speed":"Remaining";$("urem").textContent=S.free?"km/h":"workout";
  if(FUEL.length)fuelTick(0);else{$("fuelcard").className="nextcard fuelcard idle";$("fxt").textContent="Fuel";$("fxl").textContent="no plan";$("fxv").textContent=""}
  loadZones().then(ok=>ok&&renderRunChart());
  show("run");$("pause").textContent="Pause";$("stop").disabled=true;$("stop").className="ghost";
@@ -766,7 +773,7 @@ $("start").onclick=()=>{try{localStorage.setItem("tc_json",$("json").value)}catc
   BLE.begin(B[0].speed,B[0].incline).then(()=>{
    if(S){S.t0=Date.now();S.pausedMs=0;S.skip=0;S.hold=false;S.events=[];S.hr=[];S.idx=-1;S.alerted=-1;S.fz.forEach(f=>f.st=0);S.fa=S.fp=-1;beep(1,660)}})}
  beep(1,660);tick=setInterval(loop,200);clearInterval(hrt);hrt=setInterval(hrLoop,1000);hrLoop();loop()};
-function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){finish(false);return}
+function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(S.free)S.end=Math.max(1800,Math.ceil((e+300)/300)*300);else if(e>=S.end){finish(false);return}
  const i=curIdx(e),b=B[i],nb=B[i+1],rem=b.t0+b.dur-e;
  if(i!==S.idx){S.idx=i;setBlockVals(i);logEv();S.resent=false;S.mis=0;if(i>0)BLE.send(S.speed,S.incline);if(i>0){beep(3,1175);vib([300,100,300]);say(`Now ${b.speed} kilometres per hour, incline ${b.incline} percent`);S.nowUntil=Date.now()+6000}}
  const bn=$("banner");
@@ -785,7 +792,9 @@ function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(e>=S.end){fi
  $("vert").textContent=Math.round(vertOf(S.events,e));$("dist").textContent=distOf(S.events,e).toFixed(2);
  $("mach").textContent=BLE.cp?`${BLE.live.dist??"–"} m · +${BLE.live.asc??"–"} m`:"not connected";
  if(Date.now()-(S.cr||0)>2000){S.cr=Date.now();renderRunChart()}else{const ph=$("tl").querySelector(".playhead");if(ph)ph.style.left=(e/S.end*100)+"%"}
- $("ring").style.width=(100*(1-Math.max(0,rem)/b.dur))+"%";$("blkno").textContent="Block "+(i+1)+" / "+B.length}
+ if(S.free){const km=distOf(S.events,e),hs=S.hr.map(x=>x[1]);$("rem").textContent=e>30?(km/(e/3600)).toFixed(1):"–";$("blkno").textContent="Avg HR";$("blockrem").textContent=hs.length?Math.round(hs.reduce((a,x)=>a+x,0)/hs.length):"–";
+  $("ring").style.width="0";$("prog").style.width="0";$("eltot").innerHTML="&nbsp;";$("nxl").textContent="Free run";$("nxv").textContent="speed and incline: buttons";$("ps").textContent="";$("pp").textContent="";$("pi").textContent=""}
+ else{$("ring").style.width=(100*(1-Math.max(0,rem)/b.dur))+"%";$("blkno").textContent="Block "+(i+1)+" / "+B.length}}
 // ---- fuel plan: reminders in workout time (pauses don't count); tap the card to log it as taken
 function fuelTick(e){const F=S&&S.fz;if(!F||!F.length)return;
  for(let k=0;k<F.length-1;k++)if(F[k].st===0&&F[k+1].at<=e)F[k].st=2;
@@ -816,7 +825,7 @@ function distOf(ev,end){let km=0;for(let k=0;k<ev.length;k++){const t1=k+1<ev.le
 function vertOf(ev,end){let up=0;for(let k=0;k<ev.length;k++){const t1=k+1<ev.length?ev[k+1].t:end,dt=Math.max(0,t1-ev[k].t);if(ev[k].incline>0)up+=rise(ev[k].speed*dt/3600,ev[k].incline)}return up}
 document.querySelectorAll("[data-a]").forEach(btn=>{
  const a=btn.dataset.a,sp=a[0]==="s",sg=a[1]==="-"?-1:1,d=Math.abs(parseFloat(a.slice(1))),hold=sp?0.5:1;let t1=0,t2=0;
- const step=x=>{if(!S||S.paused||S.hold)return;if(sp)S.speed=Math.max(1,Math.round((S.speed+x)*10)/10);else S.incline=Math.round((S.incline+x)*10)/10;logEv();BLE.send(S.speed,S.incline);loop()};
+ const step=x=>{if(!S||S.paused||S.hold)return;if(sp)S.speed=Math.min(22,Math.max(1,Math.round((S.speed+x)*10)/10));else S.incline=Math.min(40,Math.max(-6,Math.round((S.incline+x)*10)/10));logEv();BLE.send(S.speed,S.incline);loop()};
  const stop=()=>{clearTimeout(t1);clearInterval(t2)};
  btn.onpointerdown=e=>{e.preventDefault();stop();step(sg*d);t1=setTimeout(()=>{step(sg*hold);t2=setInterval(()=>step(sg*hold),350)},500)};
  ["pointerup","pointerleave","pointercancel"].forEach(ev=>btn.addEventListener(ev,stop));
@@ -825,7 +834,7 @@ document.querySelectorAll("[data-a]").forEach(btn=>{
 $("pause").onclick=()=>{if(!S)return;if(S.paused){S.pausedMs+=Date.now()-S.pauseAt;S.paused=false;BLE.send(S.speed,S.incline);$("stop").disabled=true;$("stop").className="ghost";$("pause").textContent="Pause";$("banner").className="banner";$("banner").textContent="resumed"}
  else{S.paused=true;S.pauseAt=Date.now();$("stop").disabled=false;$("stop").className="";$("pause").textContent="Resume";$("banner").className="banner soon";$("banner").textContent="PAUSED — timer stopped, belt keeps running"}};
 $("stop").onclick=()=>S&&finish(true);
-function mkLog(e){const o=fbOut(),l={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,blocks:B.map(b=>({label:b.label,t0:b.t0,dur:b.dur})),machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc},workout:W};if(Object.keys(o).length)l.feedback=o;return l}
+function mkLog(e){const o=fbOut(),l={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,blocks:S.free?[{label:"Free run",t0:0,dur:Math.max(1,Math.round(e))}]:B.map(b=>({label:b.label,t0:b.t0,dur:b.dur})),machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc},workout:W};if(Object.keys(o).length)l.feedback=o;return l}
 function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);clearInterval(hrt);BLE.clr("hrgap");BLE.stop();try{wl&&wl.release()}catch(x){}
  if(!early)beep(4,1319);vib([500,150,500]);
  const log=mkLog(e);
