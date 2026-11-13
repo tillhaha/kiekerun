@@ -263,6 +263,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 #dchart{flex:1;min-height:0}
 pre.log{flex:1;min-height:70px;max-height:220px;overflow:auto;background:var(--bg);border:1px solid var(--line);padding:10px;border-radius:var(--r);font-size:11px;white-space:pre-wrap;word-break:break-all;margin:0;color:var(--muted)}
 .export{display:grid;grid-template-columns:1fr;gap:8px;margin-top:auto}
+#up{height:96px}
 #todaybtn{width:100%}
 #todaymsg,#upmsg{overflow-wrap:anywhere}
 #upmsg a{color:inherit;text-decoration:underline;margin-left:4px}
@@ -346,7 +347,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="card loadcol">
         <h2 class="lbl">Load workout</h2>
         <button class="pri" id="todaybtn">Today's workout</button>
-        <div class="recent"><button id="freebtn" type="button"><b>Free run</b> · no plan, you set speed and incline</button></div>
+        <div class="recent"><button id="freebtn" type="button"><b>Free run</b></button></div>
         <div class="muted" id="todaymsg" hidden></div>
         <div class="recent" id="todaylist"></div>
         <h2 class="lbl">Examples</h2>
