@@ -103,6 +103,12 @@ intervals.icu fields: `icu_rpe`, `feel` (1 Strong ... 5 Weak, verify once in the
 Calories are estimated with the ACSM walking/running equations from speed, incline and body weight
 (`tcoach/calories.py`); vertical speed per block is computed from speed and incline, not measured by the treadmill.
 
+## Workout targets
+
+A workout may set `"target_distance_km": 8.5` and `"target_elevation_m": 400`. Without them the targets are derived from the blocks
+(speed x duration, elevation from speed and incline). The plan preview, the "target" lines under Distance and Elevation gain on the run screen
+and "Planned distance / elevation" on the summary use them. Free runs have no targets.
+
 ## Nutrition plan
 
 A workout may carry a `fuel` list (times are workout time, pauses do not count):

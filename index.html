@@ -400,13 +400,13 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="rail" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg></div>
       <div class="tile val pc"><div class="lbl">Pace</div><div class="n"><span id="vp">–</span><small>min/km</small></div><div class="u"><span id="pp"></span></div></div>
       <div class="tile val sp"><div class="lbl">Speed</div><div class="n"><span id="vs">–</span><small>km/h</small></div><div class="u"><span id="ps"></span></div></div>
-      <div class="tile val"><div class="lbl">Distance</div><div class="n"><span id="dist">0.00</span><small>km</small></div><div class="u"><span>&nbsp;</span></div></div>
+      <div class="tile val"><div class="lbl">Distance</div><div class="n"><span id="dist">0.00</span><small>km</small></div><div class="u"><span id="dtgt">&nbsp;</span></div></div>
       <div class="adjc"><button data-a="s-0.1" aria-label="Speed minus 0.1 (hold for 0.5 steps)">−0.1</button><button class="pri" data-a="s+0.1" aria-label="Speed plus 0.1 (hold for 0.5 steps)">+0.1</button></div>
     </div>
     <div class="grow r3">
       <div class="rail" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 19l6-11 4 7 2-3 6 7z"/></svg><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></div>
       <div class="tile val in"><div class="lbl">Incline</div><div class="n"><span id="vi">–</span><small>%</small></div><div class="u"><span id="pi"></span></div></div>
-      <div class="tile val"><div class="lbl">Elevation gain</div><div class="n">+<span id="vert">0</span><small>m</small></div><div class="u"><span>&nbsp;</span></div></div>
+      <div class="tile val"><div class="lbl">Elevation gain</div><div class="n">+<span id="vert">0</span><small>m</small></div><div class="u"><span id="vtgt">&nbsp;</span></div></div>
       <div class="tile val hr"><div class="lbl">Heart rate</div><div class="n"><span id="hrv">–</span><small>bpm</small></div><div class="u"><span class="zc" id="hrz" hidden></span><span id="hrzp">&nbsp;</span></div></div>
       <div class="adjc"><button data-a="i-1" aria-label="Incline minus 1">−1</button><button class="pri" data-a="i+1" aria-label="Incline plus 1">+1</button></div>
     </div>
@@ -481,6 +481,9 @@ const flaskTxt=f=>f.k?fnum(f.fl)+" "+f.k[0].toUpperCase()+f.k.slice(1)+"-Flask":
 const fuelTxt=f=>f.k?[flaskTxt(f),f.n].filter(Boolean).join(" · "):[f.n,f.c?f.c+" g":"",f.f?f.f+" ml":""].filter(Boolean).join(" · ");
 const fuelSub=f=>f.k?[f.c?f.c+" g":"",f.f?f.f+" ml":""].filter(Boolean).join(" · "):"";
 const rise=(km,inc)=>km*1000*Math.sin(Math.atan(inc/100));
+// workout targets: optional target_distance_km / target_elevation_m in the JSON, else derived from the blocks
+function tgtOf(w,bl){const n=v=>Number.isFinite(+v)&&v!==null&&v!==""&&+v>=0?+v:null;
+ return{km:n(w&&w.target_distance_km)??bl.reduce((a,b)=>a+b.speed*b.dur/3600,0),up:n(w&&w.target_elevation_m)??bl.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0)}}
 function validate(bl){const is=[];bl.forEach((b,i)=>{
  if(b.speed<1||b.speed>22)is.push(["error",`Block ${i+1} ${b.label}: ${b.speed} km/h outside 1–22`]);
  if(b.incline<-6||b.incline>40)is.push(["error",`Block ${i+1} ${b.label}: ${b.incline}% outside -6 to 40`]);
@@ -492,7 +495,7 @@ function parse(){const box=$("issues"),sum=$("sum");box.innerHTML="";sum.innerHT
  const txt=$("json").value.trim();if(!txt)return;
  try{W=JSON.parse(txt);B=flat(W);if(!B.length)throw Error("no blocks")}catch(e){box.innerHTML=`<div class="issue error">${e.message}</div>`;$("pastebox").open=true;$("readytxt").textContent="The JSON has an error";W=null;return}
  const dur=B.reduce((a,b)=>a+b.dur,0);try{FUEL=fuelOf(W,dur)}catch(e){box.innerHTML=`<div class="issue error">fuel: ${e.message}</div>`;FUEL=[]}
- const km=B.reduce((a,b)=>a+b.speed*b.dur/3600,0),up=B.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0);
+ const T=tgtOf(W,B),km=T.km,up=T.up;
  sum.innerHTML=`<div class="kpis">`+kpi("Duration",fmt(dur))+kpi("Distance",km.toFixed(1)+" km","sp")+kpi("Elevation gain","+"+Math.round(up)+" m","in")+kpi("Blocks",B.length)+`</div>`;$("ctaname").textContent=W.name||"Workout";$("ctanote").textContent=W.notes||fmt(dur)+" · "+km.toFixed(1)+" km · +"+Math.round(up)+" m";
  const is=validate(B);is.forEach(([k,m])=>{const d=document.createElement("div");d.className="issue "+k;d.textContent=m;box.appendChild(d)});
  renderPreview(B);renderFuelPv(dur);$("start").disabled=is.some(i=>i[0]==="error");
@@ -706,13 +709,13 @@ function renderFuelPv(tot){const el=$("pvfuel");if(!FUEL.length){el.hidden=true;
   FUEL.map(f=>`<span class="chip">${fmt(f.at)}<i>${[fuelTxt(f),fuelSub(f)].filter(Boolean).join(" · ")}</i></span>`).join("")+"</div>";el.hidden=false}
 function renderSummary(log,e,km,plan){const free=!!(log.free||(log.workout&&log.workout.free)),PB=free?[]:(plan||B);const ev=log.events,segs=ev.map((x,k)=>({dur:Math.max(0.1,(k+1<ev.length?ev[k+1].t:e)-x.t),speed:x.speed,incline:x.incline}));
  const pl=PB.map(b=>({dur:b.dur,speed:b.speed,incline:b.incline})),pt=pl.reduce((a,g)=>a+g.dur,0),tot=Math.max(pt,segs.reduce((a,g)=>a+g.dur,0)),vt=vertOf(ev,e);
- const pv=PB.reduce((a,b)=>a+(b.incline>0?rise(b.speed*b.dur/3600,b.incline):0),0);
+ const TG=tgtOf(log.workout,PB),pv=TG.up;
  const mv=log.machine&&log.machine.ascent_m!=null?`<span>Machine ascent<b>${Math.round(log.machine.ascent_m)} m</b></span>`:"";
  const big=(l,v,u)=>`<div class="stat"><span class="lbl">${l}</span><b>${v}${u?`<small>${u}</small>`:""}</b></div>`;
  $("dchartt").textContent=free?"Run":"Planned vs actual";$("dname").textContent=log.name;$("ddate").textContent="Workout complete · "+new Date(log.started_at).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
  $("dsum").innerHTML=big("Time",fmt(e))+big("Distance",km.toFixed(2),"km")+big("Elevation gain","+"+Math.round(vt),"m")+big("Avg speed",(km/(Math.max(e,1)/3600)).toFixed(1),"km/h");
  const hs=(log.hr||[]).map(x=>x[1]),hv=hs.length?`<span>Avg HR<b>${Math.round(hs.reduce((a,b)=>a+b,0)/hs.length)} bpm</b></span><span>Max HR<b>${Math.max(...hs)} bpm</b></span>`:"";
- $("dsum2").innerHTML=(free?"":`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`)+hv+mv;
+ $("dsum2").innerHTML=(free?"":`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned distance<b>${TG.km.toFixed(1)} km</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`)+hv+mv;
  const hrd=log.hr||[],blk=(free?(log.blocks||[]):PB).map(b=>({label:b.label,t0:b.t0,dur:b.dur,speed:b.speed}));
  const draw=()=>{$("dchart").innerHTML=(hrd.length?`<div class="lbl">Heart rate</div>`+hrchart(blk,hrd,tot,{h:190})+`<div class="lbl" style="margin-top:10px">Speed and incline${free?"":", planned vs actual"}</div>`:"")+chart(segs,tot,{planned:pl,h:hrd.length?110:150})};
  draw();if(hrd.length&&!ZN)loadZones().then(ok=>ok&&draw())}
@@ -764,6 +767,7 @@ $("start").onclick=()=>{if(!(W&&W.free)){try{localStorage.setItem("tc_json",$("j
  try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){AC=null}
  try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(l=>wl=l).catch(()=>{})}catch(e){}
  S={hr:[],t0:Date.now(),started:new Date().toISOString(),pausedMs:0,paused:false,skip:0,idx:-1,events:[],alerted:-1,fz:FUEL.map(f=>({...f,st:0})),fa:-1,fp:-1,fl:0,lead:+$("lead").value||10,speed:B[0].speed,incline:B[0].incline,free:!!(W&&W.free),end:(W&&W.free)?1800:B.reduce((a,b)=>a+b.dur,0)};
+ S.tg=S.free?null:tgtOf(W,B);$("dtgt").innerHTML=S.tg?"target "+S.tg.km.toFixed(1):"&nbsp;";$("vtgt").innerHTML=S.tg?"target +"+Math.round(S.tg.up):"&nbsp;";
  $("lrem").textContent=S.free?"Avg speed":"Remaining";$("urem").textContent=S.free?"km/h":"workout";
  if(FUEL.length)fuelTick(0);else{$("fuelcard").className="nextcard fuelcard idle";$("fxt").textContent="Fuel";$("fxl").textContent="no plan";$("fxv").textContent=""}
  loadZones().then(ok=>ok&&renderRunChart());
