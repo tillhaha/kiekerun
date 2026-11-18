@@ -104,8 +104,10 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .mk{position:absolute;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:var(--chart-bg);border:2.5px solid var(--hrline);box-sizing:border-box}
 .mv{position:absolute;font:700 15px var(--fd);color:var(--ink);transform:translate(-50%,-135%);font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
 .mv.b{transform:translate(-50%,45%)}
-.bks{display:flex;gap:2px;margin:0 34px;height:20px;flex:none}
-.bks span{background:var(--surface-2);font:600 11px var(--ft);letter-spacing:.03em;color:var(--muted);padding:2px 6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border-radius:2px;min-width:0}
+.bks{display:flex;gap:2px;margin:0 34px;min-height:46px;flex:none}
+.bks span{background:var(--surface-2);display:flex;flex-direction:column;justify-content:center;gap:1px;padding:3px 7px;overflow:hidden;white-space:nowrap;border-radius:2px;min-width:0;flex-basis:0}
+.bks b{font:700 16px var(--fd);color:var(--ink);overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.bks i{font:600 11px var(--ft);font-style:normal;letter-spacing:.03em;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
 .c-plan{fill:none;stroke:var(--chart-ink);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
 .playhead{position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;background:var(--alert);left:0}
 .pw{position:relative;margin:0 34px;display:flex;flex-direction:column;flex:none}
@@ -263,7 +265,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 #dchart{flex:1;min-height:0}
 pre.log{flex:1;min-height:70px;max-height:220px;overflow:auto;background:var(--bg);border:1px solid var(--line);padding:10px;border-radius:var(--r);font-size:11px;white-space:pre-wrap;word-break:break-all;margin:0;color:var(--muted)}
 .export{display:grid;grid-template-columns:1fr;gap:8px;margin-top:auto}
-#up{height:96px}
+#fbbtn2{height:96px}
 #todaybtn{width:100%}
 #todaymsg,#upmsg{overflow-wrap:anywhere}
 #upmsg a{color:inherit;text-decoration:underline;margin-left:4px}
@@ -277,7 +279,8 @@ pre.log{flex:1;min-height:70px;max-height:220px;overflow:auto;background:var(--b
 .seg button.sel{background:var(--primary);color:var(--primary-ink);border-color:transparent}
 #fbnote{height:96px;min-height:96px;margin-top:0;resize:vertical}
 button.has{border-color:var(--highlight);box-shadow:inset 0 -3px 0 var(--highlight)}
-.fbfoot{display:flex;justify-content:flex-end;margin-top:4px}
+.fbfoot{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:4px}
+.fbfoot .muted{margin-right:auto}
 button.hl{background:var(--highlight);color:var(--highlight-ink);border-color:transparent;padding:0 40px}
 /* modal */
 .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
@@ -338,7 +341,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div class="fbsec"><span class="lbl">Note</span>
       <textarea id="fbnote" spellcheck="true" placeholder="How did it go?"></textarea>
       <div class="row"><button id="fbmic" hidden>Speak</button><span class="muted" id="fbmicmsg"></span></div></div>
-    <div class="fbfoot"><button class="hl" id="fbclose">Done</button></div>
+    <div class="fbfoot"><span class="muted" id="fbgate"></span><button class="ghost" id="fbclose">Close</button><button class="hl" id="up">Upload to intervals.icu</button></div>
   </div></div>
 
   <!-- 1 · Plan -->
@@ -433,7 +436,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <pre id="logout" hidden></pre>
         <div class="muted" id="fbsum"></div>
         <div class="muted" id="upmsg"></div>
-        <div class="export"><button id="fbbtn2">Workout-Feedback</button><button class="pri" id="up">Upload to intervals.icu</button><button class="ghost" id="discard">Discard run</button><button class="ghost" id="again">New</button></div>
+        <div class="export"><button class="pri" id="fbbtn2">Feedback &amp; upload</button><button class="ghost" id="discard">Discard run</button><button class="ghost" id="again">New</button></div>
       </div>
     </div>
   </section>
@@ -605,7 +608,8 @@ function renderFB(){
  $("fbcarbtxt").textContent=g+" g"+(t>=600&&g?" · "+Math.round(g/(t/3600))+" g/h":"")+(FB.carbs.length?" · last at "+fmt(FB.carbs[FB.carbs.length-1][0]):"");
  $("fbundo").disabled=!FB.carbs.length;
  const s=fbSummary();$("fbsum").textContent=s?"Feedback: "+s:"";
- $("fbbtn2").classList.toggle("has",!!s)}
+ $("fbbtn2").classList.toggle("has",!!s);gateUp()}
+function gateUp(){const b=$("up"),ok=!!(FB.rpe&&FB.feel),done=/^(Uploaded|Already)/.test(b.textContent)||b.dataset.busy==="1";if(!done)b.disabled=!ok;$("fbgate").textContent=ok||done?"":"Select RPE and Feel to upload"}
 function fbChanged(){renderFB();refreshLog();if(LAST_LOG&&!S)persistRun(LAST_LOG,"finished")}
 for(let i=1;i<=10;i++){const b=document.createElement("button");b.textContent=i;b.dataset.v=i;b.onclick=()=>{FB.rpe=FB.rpe===i?null:i;fbChanged()};$("fbrpe").appendChild(b)}
 FEEL.forEach(([v,l])=>{const b=document.createElement("button");b.textContent=l;b.dataset.v=v;b.onclick=()=>{FB.feel=FB.feel===v?null:v;fbChanged()};$("fbfeel").appendChild(b)});
@@ -679,10 +683,13 @@ function hrchart(blocks,hr,tot,o={}){
  const yl=`<div class="yl l">`+[0,25,50,75].map(y=>`<span${y?"":' class="t"'} style="top:${y}%">${Math.round((hi-(hi-lo)*y/100)/5)*5}</span>`).join("")+`<span class="u">bpm</span></div>`;
  const st=niceStep(tot);let xl="";for(let t=0;t<=tot;t+=st)xl+=`<span style="left:${t/tot*100}%">${fmt(t)}</span>`;
  const zr=z=>z>1?(ZN[z-2]+1)+"–"+ZN[z-1]+" bpm":"≤"+ZN[0]+" bpm";
- const strip=blocks.map(b=>`<span style="flex:${Math.max(b.dur,1)}" title="${b.label}">${b.dur/tot>.07?b.label+(ZN&&zoneOfLabel(b.label)?" · "+zr(zoneOfLabel(b.label)):"")+(b.speed!=null?" · "+(+b.speed).toFixed(1):""):""}</span>`).join("");
+ const strip=blocks.map(b=>{const w=b.dur/tot,sv=b.speed!=null?(+b.speed).toFixed(1):null,iv=b.incline!=null?Math.round(+b.incline*10)/10:null,
+   v=sv==null?"":w>=.12?sv+" km/h"+(iv!=null?" · "+iv+" %":""):w>=.08?sv+(iv!=null?" · "+iv+"%":""):w>=.035?sv:"",
+   sub=w>=.09?b.label+(ZN&&zoneOfLabel(b.label)?" · "+zr(zoneOfLabel(b.label)):""):"";
+  return `<span style="flex:${Math.max(b.dur,1)}" title="${b.label}${sv!=null?" · "+sv+" km/h"+(iv!=null?" · "+iv+" %":""):""}">${v?`<b>${v}</b>`:""}${sub?`<i>${sub}</i>`:""}</span>`}).join("");
  const cap=blocks.length>=5?"HR · avg of last 60 s per block":"HR · avg per "+(tot<=3600?5:tot<=7200?10:15)+" min";
  return `<div class="chartbox${o.fill?" fill":""}" style="--ch:${o.h||150}px"><div class="pw">${yl}<div class="plot"><svg viewBox="0 0 1000 100" preserveAspectRatio="none">${grid}${rects}<path class="c-hr" d="${d}"/></svg>${mk}<div class="hrleg">${cap}</div>${o.playhead?`<div class="playhead" style="left:${(now/tot*100).toFixed(2)}%"></div>`:""}</div></div><div class="bks">${strip}</div><div class="xl">${xl}</div></div>`}
-function renderRunChart(){if(S)$("tl").innerHTML=hrchart(B,S.hr,S.end,{now:Math.min(elapsed(),S.end),playhead:true,fill:true})}
+function renderRunChart(){if(S)$("tl").innerHTML=hrchart(S.free?[{label:"Free run",t0:0,dur:S.end}]:B,S.hr,S.end,{now:Math.min(elapsed(),S.end),playhead:true,fill:true})}
 let ZN=null,ZNP=null;
 function loadZones(){if(ZN)return Promise.resolve(true);return ZNP||(ZNP=API("/api/zones").then(z=>{ZNP=null;if(z&&Array.isArray(z.hr_zones)&&z.hr_zones.length===5){ZN=z.hr_zones;return true}return false}).catch(()=>{ZNP=null;return false}))}
 loadZones();
@@ -716,7 +723,7 @@ function renderSummary(log,e,km,plan){const free=!!(log.free||(log.workout&&log.
  $("dsum").innerHTML=big("Time",fmt(e))+big("Distance",km.toFixed(2),"km")+big("Elevation gain","+"+Math.round(vt),"m")+big("Avg speed",(km/(Math.max(e,1)/3600)).toFixed(1),"km/h");
  const hs=(log.hr||[]).map(x=>x[1]),hv=hs.length?`<span>Avg HR<b>${Math.round(hs.reduce((a,b)=>a+b,0)/hs.length)} bpm</b></span><span>Max HR<b>${Math.max(...hs)} bpm</b></span>`:"";
  $("dsum2").innerHTML=(free?"":`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned distance<b>${TG.km.toFixed(1)} km</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`)+hv+mv;
- const hrd=log.hr||[],blk=(free?(log.blocks||[]):PB).map(b=>({label:b.label,t0:b.t0,dur:b.dur,speed:b.speed}));
+ const hrd=log.hr||[],blk=(free?(log.blocks||[]):PB).map(b=>({label:b.label,t0:b.t0,dur:b.dur,speed:b.speed,incline:b.incline}));
  const draw=()=>{$("dchart").innerHTML=(hrd.length?`<div class="lbl">Heart rate</div>`+hrchart(blk,hrd,tot,{h:190})+`<div class="lbl" style="margin-top:10px">Speed and incline${free?"":", planned vs actual"}</div>`:"")+chart(segs,tot,{planned:pl,h:hrd.length?110:150})};
  draw();if(hrd.length&&!ZN)loadZones().then(ok=>ok&&draw())}
 // ---- run archive: browser copy (localStorage) + server database (SQLite)
@@ -749,7 +756,7 @@ async function openRun(id,status){if(S)return;let log=(locRead().find(r=>r.id===
  if(!log){alert("This run is no longer available.");return}
  const e=log.duration_s||0;let plan=[];try{plan=flat(log.workout)}catch(x){}
  FB={rpe:null,feel:null,note:"",carbs:[],...(log.feedback||{})};$("fbnote").value=FB.note||"";LAST_LOG=log;
- $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").style.color="";$("discard").hidden=status==="uploaded";
+ $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("up").dataset.busy="";gateUp();$("upmsg").style.color="";$("discard").hidden=status==="uploaded";
  $("upmsg").textContent=status==="uploaded"?"Already uploaded. Uploading again creates no duplicate.":status==="recording"?"This run was interrupted. The saved part is shown.":"";
  renderSummary(log,e,distOf(log.events,e),plan);show("done");refreshLog();renderFB()}
 
@@ -845,7 +852,7 @@ function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);cle
  const log=mkLog(e);
  const km=S.events.reduce((a,ev,k)=>a+ev.speed*Math.max(0,((k+1<S.events.length?S.events[k+1].t:e)-ev.t))/3600,0);
  show("done");
- $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("upmsg").textContent="";$("upmsg").style.color="";
+ $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("up").dataset.busy="";gateUp();$("upmsg").textContent="";$("upmsg").style.color="";
  renderSummary(log,e,km);
  LAST_LOG=log;S=null;$("discard").hidden=false;refreshLog();renderFB();renderSteps();persistRun(log,"finished")}
 $("again").onclick=()=>show("setup");
@@ -856,13 +863,13 @@ $("discard").onclick=async()=>{const b=$("discard");
  const id=rid(LAST_LOG);locWrite(locRead().filter(r=>r.id!==id));svPend=null;
  if(RUNS_SRV){try{await API("/api/runs/"+id,{method:"DELETE"})}catch(e){}}
  LAST_LOG=null;FB={rpe:null,feel:null,note:"",carbs:[]};$("fbnote").value="";renderFB();renderSteps();show("setup");planMsg("Run discarded.")};
-$("up").onclick=async()=>{const t=$("logout").textContent;if(!t)return;const b=$("up"),m=$("upmsg");b.disabled=true;m.style.color="";m.textContent="Uploading…";
+$("up").onclick=async()=>{const t=$("logout").textContent;if(!t||!(FB.rpe&&FB.feel))return;const b=$("up"),m=$("upmsg");b.disabled=true;b.dataset.busy="1";m.style.color="";m.textContent="Uploading…";
  try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED})});
-  if(d.ok){markUploaded(LAST_LOG);$("discard").hidden=true}
+  if(d.ok){markUploaded(LAST_LOG);$("discard").hidden=true;closeFB()}
   const a0=d.intervals&&d.intervals.activities&&d.intervals.activities[0],id=a0&&a0.id;
   if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded";if(d.calories)m.append(" · ~"+d.calories+" kcal (estimate)");if(d.update_error)m.append(" · Feedback fields not saved: "+d.update_error)}
   else{m.textContent="intervals.icu created no new activity (this session was probably uploaded already).";b.textContent="Already uploaded"}
- }catch(e){m.textContent="Upload failed: "+e.message;m.style.color="var(--alert-tint-ink)";b.disabled=false}};
+ }catch(e){m.textContent="Upload failed: "+e.message;m.style.color="var(--alert-tint-ink)";b.disabled=false}finally{b.dataset.busy=""}};
 const MOON="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z",SUN="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6L4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M16 12a4 4 0 11-8 0 4 4 0 018 0z";
 function setTheme(t){document.documentElement.dataset.theme=t;$("themeic").setAttribute("d",t==="night"?SUN:MOON);try{localStorage.setItem("tc_theme",t)}catch(e){}}
 $("themebtn").onclick=()=>setTheme(document.documentElement.dataset.theme==="night"?"volt":"night");
