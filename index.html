@@ -703,7 +703,7 @@ function hrchart(blocks,hr,tot,o={}){
  const strip=blocks.map(b=>{const w=b.dur/tot,sv=b.speed!=null?(+b.speed).toFixed(1):null,iv=b.incline!=null?Math.round(+b.incline*10)/10:null,
    v=sv==null?"":w>=.12?sv+" km/h"+(iv!=null?" · "+iv+" %":""):w>=.08?sv+(iv!=null?" · "+iv+"%":""):w>=.035?sv:"",
    sub=w>=.09?b.label+(ZN&&zoneOfLabel(b.label)?" · "+zr(zoneOfLabel(b.label)):""):"";
-  return `<span style="flex:${Math.max(b.dur,1)}" title="${b.label}${sv!=null?" · "+sv+" km/h"+(iv!=null?" · "+iv+" %":""):""}">${v?`<b>${v}</b>`:""}${sub?`<i>${sub}</i>`:""}</span>`}).join("");
+  return `<span style="flex:${Math.max(b.dur,1)}" title="${b.label}${sv!=null?" · "+sv+" km/h"+(iv!=null?" · "+iv+" %":""):""}">${v?`<b>${v}</b>`:sub?`<i>${sub}</i>`:""}</span>`}).join("");
  const cap=blocks.length>=5?"HR · avg of last 60 s per block":"HR · avg per "+(tot<=3600?5:tot<=7200?10:15)+" min";
  return `<div class="chartbox${o.fill?" fill":""}" style="--ch:${o.h||150}px"><div class="pw">${yl}<div class="plot"><svg viewBox="0 0 1000 100" preserveAspectRatio="none">${grid}${rects}${under}${over}<path class="c-hr" d="${d}"/></svg>${mk}<div class="hrleg">${capx||cap}</div>${o.playhead?`<div class="playhead" style="left:${(now/tot*100).toFixed(2)}%"></div>`:""}</div></div><div class="bks">${strip}</div><div class="xl">${xl}</div></div>`}
 function runProfile(now){const P=[],ev=S.events||[];for(let k=0;k<ev.length;k++){const t0=ev[k].t,t1=Math.min(now,k+1<ev.length?ev[k+1].t:now);if(t1>t0)P.push({t0,t1,speed:ev[k].speed,incline:ev[k].incline})}
