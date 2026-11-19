@@ -87,6 +87,9 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 [data-theme="night"] .card{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;padding-left:0;padding-right:0}
 
 /* chart */
+.upok{display:flex;align-items:center;gap:16px;padding:18px 22px;margin:0 0 12px;border-radius:var(--r);background:#1faa59;color:#fff;font:700 22px var(--fd);letter-spacing:.02em}
+.upok::before{content:"✓";display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#fff;color:#1faa59;font-size:24px;flex:none}
+.upok a{margin-left:auto;color:#fff;font:600 15px var(--ft);text-decoration:underline}
 .chartbox{display:flex;flex-direction:column;gap:4px;min-height:0}
 .chartbox.fill{height:100%}
 .plot{position:relative;background:var(--chart-bg);border-radius:var(--radius-sq);overflow:hidden;height:var(--ch,150px);flex:none}
@@ -408,9 +411,9 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     </div>
     <div class="grow r3">
       <div class="rail" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 19l6-11 4 7 2-3 6 7z"/></svg><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></div>
+      <div class="tile val hr"><div class="lbl">Heart rate</div><div class="n"><span id="hrv">–</span><small>bpm</small></div><div class="u"><span class="zc" id="hrz" hidden></span><span id="hrzp">&nbsp;</span></div></div>
       <div class="tile val in"><div class="lbl">Incline</div><div class="n"><span id="vi">–</span><small>%</small></div><div class="u"><span id="pi"></span></div></div>
       <div class="tile val"><div class="lbl">Elevation gain</div><div class="n">+<span id="vert">0</span><small>m</small></div><div class="u"><span id="vtgt">&nbsp;</span></div></div>
-      <div class="tile val hr"><div class="lbl">Heart rate</div><div class="n"><span id="hrv">–</span><small>bpm</small></div><div class="u"><span class="zc" id="hrz" hidden></span><span id="hrzp">&nbsp;</span></div></div>
       <div class="adjc"><button data-a="i-1" aria-label="Incline minus 1">−1</button><button class="pri" data-a="i+1" aria-label="Incline plus 1">+1</button></div>
     </div>
     <div class="bottom">
@@ -427,6 +430,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
   <!-- 3 · Summary -->
   <section id="done" class="screen sum-screen" hidden>
     <div class="sumhead"><div><div class="lbl" id="ddate">Workout complete</div><h1 class="ptitle" id="dname">Workout</h1></div></div>
+    <div id="upok" class="upok" hidden role="status"></div>
     <div id="dsum" class="bigstats"></div>
     <div id="dsum2" class="substats"></div>
     <div class="sum-body">
@@ -756,7 +760,7 @@ async function openRun(id,status){if(S)return;let log=(locRead().find(r=>r.id===
  if(!log){alert("This run is no longer available.");return}
  const e=log.duration_s||0;let plan=[];try{plan=flat(log.workout)}catch(x){}
  FB={rpe:null,feel:null,note:"",carbs:[],...(log.feedback||{})};$("fbnote").value=FB.note||"";LAST_LOG=log;
- $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("up").dataset.busy="";gateUp();$("upmsg").style.color="";$("discard").hidden=status==="uploaded";
+ $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("up").dataset.busy="";gateUp();$("upmsg").style.color="";$("discard").hidden=status==="uploaded";$("upok").textContent=status==="uploaded"?"Already uploaded to intervals.icu":"";$("upok").hidden=status!=="uploaded";
  $("upmsg").textContent=status==="uploaded"?"Already uploaded. Uploading again creates no duplicate.":status==="recording"?"This run was interrupted. The saved part is shown.":"";
  renderSummary(log,e,distOf(log.events,e),plan);show("done");refreshLog();renderFB()}
 
@@ -852,7 +856,7 @@ function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);cle
  const log=mkLog(e);
  const km=S.events.reduce((a,ev,k)=>a+ev.speed*Math.max(0,((k+1<S.events.length?S.events[k+1].t:e)-ev.t))/3600,0);
  show("done");
- $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("up").dataset.busy="";gateUp();$("upmsg").textContent="";$("upmsg").style.color="";
+ $("up").disabled=false;$("up").textContent="Upload to intervals.icu";$("up").dataset.busy="";gateUp();$("upmsg").textContent="";$("upmsg").style.color="";$("upok").hidden=true;$("upok").textContent="";
  renderSummary(log,e,km);
  LAST_LOG=log;S=null;$("discard").hidden=false;refreshLog();renderFB();renderSteps();persistRun(log,"finished")}
 $("again").onclick=()=>show("setup");
@@ -866,8 +870,9 @@ $("discard").onclick=async()=>{const b=$("discard");
 $("up").onclick=async()=>{const t=$("logout").textContent;if(!t||!(FB.rpe&&FB.feel))return;const b=$("up"),m=$("upmsg");b.disabled=true;b.dataset.busy="1";m.style.color="";m.textContent="Uploading…";
  try{const d=await API("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({log:JSON.parse(t),paired_event_id:PLANNED})});
   if(d.ok){markUploaded(LAST_LOG);$("discard").hidden=true;closeFB()}
+  const ub=$("upok");ub.hidden=true;ub.textContent="";
   const a0=d.intervals&&d.intervals.activities&&d.intervals.activities[0],id=a0&&a0.id;
-  if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded";if(d.calories)m.append(" · ~"+d.calories+" kcal (estimate)");if(d.update_error)m.append(" · Feedback fields not saved: "+d.update_error)}
+  if(id){m.textContent="Uploaded to intervals.icu.";const a=document.createElement("a");a.href="https://intervals.icu/activities/"+encodeURIComponent(id);a.target="_blank";a.rel="noopener";a.textContent="Open activity";m.appendChild(a);b.textContent="Uploaded";ub.textContent="Uploaded to intervals.icu";const l2=a.cloneNode(true);ub.appendChild(l2);ub.hidden=false;window.scrollTo(0,0);if(d.calories)m.append(" · ~"+d.calories+" kcal (estimate)");if(d.update_error)m.append(" · Feedback fields not saved: "+d.update_error)}
   else{m.textContent="intervals.icu created no new activity (this session was probably uploaded already).";b.textContent="Already uploaded"}
  }catch(e){m.textContent="Upload failed: "+e.message;m.style.color="var(--alert-tint-ink)";b.disabled=false}finally{b.dataset.busy=""}};
 const MOON="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z",SUN="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6L4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M16 12a4 4 0 11-8 0 4 4 0 018 0z";
