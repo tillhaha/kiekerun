@@ -70,9 +70,11 @@ Dates are `YYYY-MM-DD`, default is the last 14 days, maximum range 400 days. The
 | `save_treadmill_workout(date, workout)` | plans a KiekeRun workout (blocks with speed/incline, checked against the treadmill limits); same name on the same day updates it |
 | `save_planned_workout(date, name, type?, description?, duration_min?, load?, carbs_per_h?)` | plans any other workout; `description` is intervals.icu workout text (`- 15m Z2 Pace`); same name on the same day updates it |
 | `delete_planned_workout(event_id)` | deletes a planned workout, only one created here or by KiekeRun (`coach-` / `tcoach-` external id), only today or later |
+| `save_season_phase(start, end, description, name?, event_id?)` | creates or updates a season phase (`PLAN`); `end` is the last day, stored as the day after like the intervals.icu generator does |
+| `save_week_targets(weeks[], type?)` | sets weekly targets (`TARGET`: hours / load / km) for up to 60 Mondays per call and marks recovery weeks with an `Erholungswoche` note |
+| `delete_season_entries(event_ids[])` | deletes `PLAN`, `TARGET` and recovery-week notes, also generator-made ones, only today or later |
 
-The write tools only touch planned `WORKOUT` entries. They cannot change activities, wellness data, races or
-notes. Dates must be between yesterday and 400 days ahead, and all writes together are capped at 30 per hour.
+The write tools only touch planned `WORKOUT` entries, notes and the season plan. They cannot change activities, wellness data or races. Dates must be between yesterday and 400 days ahead, and all writes together are capped at 30 per hour.
 Because the URL is the only secret, anyone who has it can plan workouts once writing is on: keep `MCP_TOKEN` private.
 Your intervals.icu API key needs no extra scope setting; it already allows calendar writes (the same call KiekeRun uses).
 

@@ -2,9 +2,11 @@
 
 Read tools:  get_activities, get_activity, get_activity_streams, get_wellness, get_plan_vs_actual.
 Write tools (only when MCP_ALLOW_WRITE=1): save_treadmill_workout, save_planned_workout,
-save_note, delete_planned_workout, delete_note. They only touch planned WORKOUT entries and
-NOTE markers in the calendar; they cannot change activities, wellness data or races, and
-delete only works on entries this app created.
+save_note, delete_planned_workout, delete_note, save_season_phase, save_week_targets,
+delete_season_entries. They only touch planned WORKOUT entries, NOTE markers and the season plan
+(PLAN phases, TARGET weeks, recovery-week notes); they cannot change activities, wellness data or races.
+Workouts and notes are deleted only when this app created them; season-plan entries may be deleted
+whoever created them (the intervals.icu plan generator writes them), but only from today on.
 
 Auth is a secret in the URL path (env MCP_TOKEN), because claude.ai's custom connectors take a URL
 and cannot send our Basic-Auth login. Anyone with the URL can read your training data (and plan
@@ -19,7 +21,7 @@ from datetime import timedelta
 from typing import Callable
 
 from server.ratelimit import RateLimiter
-from tcoach.coach_data import (ACTIVITY_FIELDS, SEASON_CATEGORIES, STREAM_TYPES, parse_day, plan_vs_actual, resolve_range, summarize_activity,
+from tcoach.coach_data import (ACTIVITY_FIELDS, RECOVERY_WORDS, SEASON_CATEGORIES, STREAM_TYPES, parse_day, plan_vs_actual, resolve_range, summarize_activity,
                                summarize_activity_detail, summarize_season, summarize_streams, summarize_wellness, summarize_workout_doc, summarize_zones)
 from tcoach.intervals_client import IntervalsClient, IntervalsError, slug
 from tcoach.intervals_text import to_intervals_text
@@ -141,6 +143,38 @@ WRITE_TOOLS = [
                     "Use event_id from get_plan_vs_actual or a save result.",
      "inputSchema": {"type": "object", "required": ["event_id"], "properties": {"event_id": {"type": "integer"}}},
      "annotations": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True}},
+    {"name": "save_season_phase",
+     "description": "Create or update one phase of the season plan (intervals.icu PLAN entry, shown as a band over the calendar). "
+                    "start and end are the first and last day of the phase (inclusive; end is usually a Sunday). The description "
+                    "should start with the phase name and a colon, e.g. 'Build 1: Z3 5-10 %, ME', because get_season_plan reads "
+                    "the phase name from the text before the colon. Pass event_id to change an existing phase (also one made "
+                    "by the intervals.icu plan generator); without it a new phase is created, or the one this connector "
+                    "created with the same name on the same start day is updated.",
+     "inputSchema": {"type": "object", "required": ["start", "end", "description"], "properties": {
+         "start": _DATE, "end": _DATE, "name": {"type": "string", "maxLength": 120, "description": "Default: the season name, e.g. UTMB"},
+         "description": {"type": "string", "maxLength": 2000}, "event_id": {"type": "integer"}}},
+     "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}},
+    {"name": "save_week_targets",
+     "description": "Set the weekly targets of the season plan (intervals.icu TARGET entries) for up to 60 weeks in one call. "
+                    "Each week: week_start (a Monday), and any of hours, load, km. recovery: true adds an 'Erholungswoche' "
+                    "note in that week (how get_season_plan and intervals.icu mark recovery weeks), recovery: false removes "
+                    "recovery notes in that week. An existing TARGET on that Monday is updated (whoever created it), "
+                    "otherwise one is created.",
+     "inputSchema": {"type": "object", "required": ["weeks"], "properties": {
+         "type": {"type": "string", "enum": list(WORKOUT_TYPES), "description": "Sport of the targets, default Run"},
+         "weeks": {"type": "array", "minItems": 1, "maxItems": 60, "items": {"type": "object", "required": ["week_start"], "properties": {
+             "week_start": _DATE, "hours": {"type": "number", "minimum": 0, "maximum": 60},
+             "load": {"type": "number", "minimum": 0, "maximum": 3000}, "km": {"type": "number", "minimum": 0, "maximum": 1000},
+             "recovery": {"type": "boolean"}}}}}},
+     "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}},
+    {"name": "delete_season_entries",
+     "description": "Delete season-plan entries by event_id (up to 100 per call): PLAN phases, TARGET weeks and recovery-week "
+                    "notes ('Erholungswoche' etc.), also ones made by the intervals.icu plan generator. Only entries starting "
+                    "today or later; races, workouts, the season start and other notes are refused. Use event_ids from "
+                    "get_season_plan.",
+     "inputSchema": {"type": "object", "required": ["event_ids"], "properties": {
+         "event_ids": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"type": "integer"}}}},
+     "annotations": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True}},
 ]
 WRITE_NAMES = {t["name"] for t in WRITE_TOOLS}
 
@@ -180,6 +214,22 @@ def _check_date(v, today: str) -> str:
     if d < t - timedelta(days=1) or d > t + timedelta(days=MAX_AHEAD_DAYS):
         raise ValueError("date must be between yesterday and 400 days ahead")
     return d.isoformat()
+
+
+def _day(e: dict) -> str:
+    return (e.get("start_date_local") or "")[:10]
+
+
+def _is_recovery_note(e: dict) -> bool:
+    return any(w in (e.get("name") or "").lower() for w in RECOVERY_WORDS)
+
+
+def _season_name(cl: IntervalsClient, day: str) -> str:
+    """Name of the season (SEASON_START) the phase belongs to, so new phases look like the generator's."""
+    t = parse_day(day, "day")
+    evs = cl.list_events((t - timedelta(days=400)).isoformat(), day, category=None)
+    starts = [e for e in evs if e.get("category") == "SEASON_START"]
+    return (max(starts, key=_day).get("name") if starts else None) or "Season"
 
 
 def _write(name: str, args: dict, cl: IntervalsClient, today: str) -> dict:
@@ -263,6 +313,119 @@ def _write(name: str, args: dict, cl: IntervalsClient, today: str) -> dict:
             raise ValueError("past notes are not deleted")
         cl.delete_event(eid)
         return _text({"deleted": True, "event_id": eid, "name": ev.get("name"), "date": (ev.get("start_date_local") or "")[:10]})
+    if name == "save_season_phase":
+        start, end = _check_date(args.get("start"), today), _check_date(args.get("end"), today)
+        if end < start:
+            raise ValueError("end must not be before start")
+        desc = args.get("description")
+        if not isinstance(desc, str) or not desc.strip() or len(desc) > 2000:
+            raise ValueError("description is required (max 2000 characters)")
+        title = str(args.get("name") or "").strip() or _season_name(cl, start)
+        if len(title) > 120:
+            raise ValueError("name must be at most 120 characters")
+        # intervals.icu stores a phase's end as the day after its last day (the next phase's start)
+        end_excl = (parse_day(end, "end") + timedelta(days=1)).isoformat()
+        ev = {"category": "PLAN", "start_date_local": f"{start}T00:00:00", "end_date_local": f"{end_excl}T00:00:00",
+              "name": title, "description": desc.strip()}
+        eid = args.get("event_id")
+        if eid is not None:
+            if isinstance(eid, bool) or not isinstance(eid, int) or eid <= 0:
+                raise ValueError("event_id must be a positive integer")
+            old = cl.get_event(eid)
+            if old.get("category") != "PLAN":
+                raise ValueError("event is not a season phase (PLAN)")
+            res = cl._call("PUT", f"/events/{eid}", json=ev) | {"_updated": True}
+        else:
+            ev["external_id"] = f"coach-plan-{start}-{slug(desc.split(':')[0])}"
+            res = cl.upsert_event(ev)
+        return _text({"saved": True, "updated_existing": bool(res.get("_updated")), "event_id": res.get("id"),
+                      "start": start, "end": end, "description": desc.strip()})
+    if name == "save_week_targets":
+        weeks = args.get("weeks")
+        if not isinstance(weeks, list) or not 1 <= len(weeks) <= 60:
+            raise ValueError("weeks must be a list of 1-60 weeks")
+        typ = args.get("type", "Run")
+        if typ not in WORKOUT_TYPES:
+            raise ValueError("type must be one of: " + ", ".join(WORKOUT_TYPES))
+        clean = []
+        for w in weeks:
+            if not isinstance(w, dict):
+                raise ValueError("each week must be an object")
+            day = _check_date(w.get("week_start"), today)
+            if parse_day(day, "week_start").weekday() != 0:
+                raise ValueError(f"week_start {day} is not a Monday")
+            fields = {}
+            for key, field, hi, mult in (("hours", "time_target", 60, 3600), ("load", "load_target", 3000, 1), ("km", "distance_target", 1000, 1000)):
+                v = w.get(key)
+                if v is None:
+                    continue
+                if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not 0 <= v <= hi:
+                    raise ValueError(f"{key} must be a number 0-{hi}")
+                fields[field] = round(v * mult)
+            rec = w.get("recovery")
+            if rec is not None and not isinstance(rec, bool):
+                raise ValueError("recovery must be true or false")
+            if not fields and rec is None:
+                raise ValueError(f"week {day}: give hours, load, km or recovery")
+            clean.append((day, fields, rec))
+        first, last = clean[0][0], max(c[0] for c in clean)
+        last_end = (parse_day(last, "d") + timedelta(days=6)).isoformat()
+        existing = cl.list_events(min(c[0] for c in clean), last_end, category=None)
+        out = []
+        for day, fields, rec in clean:
+            wk_end = (parse_day(day, "d") + timedelta(days=6)).isoformat()
+            row = {"week_start": day}
+            if fields:
+                ev = {"category": "TARGET", "type": typ, "name": "Weekly", "start_date_local": f"{day}T00:00:00",
+                      "end_date_local": f"{(parse_day(day, 'd') + timedelta(days=1)).isoformat()}T00:00:00", **fields}
+                old = next((e for e in existing if e.get("category") == "TARGET" and _day(e) == day
+                            and e.get("type", typ) == typ), None)
+                if old:
+                    res = cl._call("PUT", f"/events/{old['id']}", json=ev)
+                    row["updated_existing"] = True
+                else:
+                    res = cl._call("POST", "/events", json={**ev, "external_id": f"coach-target-{day}-{slug(typ)}"})
+                row["event_id"] = (res or {}).get("id")
+                row.update({k: w for k, w in (("hours", fields.get("time_target", 0) / 3600 if "time_target" in fields else None),
+                                               ("load", fields.get("load_target")), ("km", fields.get("distance_target", 0) / 1000
+                                                                                     if "distance_target" in fields else None)) if w is not None})
+            if rec is not None:
+                notes = [e for e in existing if e.get("category") == "NOTE" and day <= _day(e) <= wk_end and _is_recovery_note(e)]
+                if rec and not notes:
+                    cl._call("POST", "/events", json={"category": "NOTE", "start_date_local": f"{day}T00:00:00",
+                                                      "name": "Erholungswoche", "description": "",
+                                                      "external_id": f"coach-note-{day}-erholungswoche"})
+                if not rec:
+                    for n in notes:
+                        if _day(n) >= today:
+                            cl.delete_event(n["id"])
+                row["recovery"] = rec
+            out.append(row)
+        return _text({"saved": len(out), "weeks": out})
+    if name == "delete_season_entries":
+        ids = args.get("event_ids")
+        if not isinstance(ids, list) or not 1 <= len(ids) <= 100:
+            raise ValueError("event_ids must be a list of 1-100 ids")
+        done, refused = [], []
+        for eid in ids:
+            if isinstance(eid, bool) or not isinstance(eid, int) or eid <= 0:
+                refused.append({"event_id": eid, "reason": "not a positive integer"})
+                continue
+            try:
+                ev = cl.get_event(eid)
+            except IntervalsError:
+                refused.append({"event_id": eid, "reason": "not found"})
+                continue
+            cat = ev.get("category")
+            if not (cat in ("PLAN", "TARGET") or (cat == "NOTE" and _is_recovery_note(ev))):
+                refused.append({"event_id": eid, "reason": f"{cat} entries are not season-plan entries"})
+                continue
+            if _day(ev) < today:
+                refused.append({"event_id": eid, "reason": "starts before today"})
+                continue
+            cl.delete_event(eid)
+            done.append({"event_id": eid, "category": cat, "date": _day(ev)})
+        return _text({"deleted": done, "refused": refused})
     raise ToolError(f"unknown tool: {name}")
 
 

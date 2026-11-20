@@ -251,3 +251,54 @@ def test_bare_zone_step_gets_a_power_target_warning():
                       "description": "- 10m Z1 WU\n- 30m Z2 HR\n- 5m Z1 Pace"}, CL(), "2026-10-19", allow_write=True)
     out = _j.loads(r["content"][0]["text"])
     assert "10m Z1 WU" in out["warning"] and "30m" not in out["warning"] and "5m" not in out["warning"]
+
+
+SEASON_CAL = [
+    {"id": 1, "category": "SEASON_START", "name": "UTMB", "start_date_local": "2026-11-23T00:00:00"},
+    {"id": 2, "category": "PLAN", "name": "UTMB", "start_date_local": "2026-11-23T00:00:00",
+     "end_date_local": "2027-04-12T00:00:00", "description": "Base Phase: x"},
+    {"id": 3, "category": "TARGET", "type": "Run", "name": "Weekly", "start_date_local": "2026-11-23T00:00:00", "load_target": 296},
+    {"id": 4, "category": "NOTE", "name": "Erholungswoche", "start_date_local": "2026-12-14T00:00:00"},
+    {"id": 5, "category": "RACE_A", "name": "UTMB", "start_date_local": "2027-08-27T00:00:00"},
+    {"id": 6, "category": "NOTE", "name": "Arzt", "start_date_local": "2026-12-15T00:00:00"},
+    {"id": 7, "category": "TARGET", "type": "Run", "name": "Weekly", "start_date_local": "2026-10-05T00:00:00"},
+]
+
+
+def test_save_season_phase_create_and_update(mk):
+    c, cal = mk(SEASON_CAL)
+    r = call(c, "save_season_phase", {"start": "2027-02-15", "end": "2027-04-11", "description": "Build 1: Z3"})["data"]
+    ev = cal.events[r["event_id"]]
+    assert ev["category"] == "PLAN" and ev["name"] == "UTMB" and ev["end_date_local"] == "2027-04-12T00:00:00"
+    r2 = call(c, "save_season_phase", {"event_id": 2, "start": "2026-11-23", "end": "2027-02-14", "description": "Base: Z1"})["data"]
+    assert r2["updated_existing"] and cal.events[2]["end_date_local"] == "2027-02-15T00:00:00"
+    bad = call(c, "save_season_phase", {"event_id": 3, "start": "2026-11-23", "end": "2027-02-14", "description": "x: y"})
+    assert bad["isError"]
+    assert call(c, "save_season_phase", {"start": "2027-02-15", "end": "2027-02-01", "description": "x"})["isError"]
+
+
+def test_save_week_targets_updates_creates_and_marks_recovery(mk):
+    c, cal = mk(SEASON_CAL)
+    r = call(c, "save_week_targets", {"weeks": [
+        {"week_start": "2026-11-23", "hours": 8, "load": 300},
+        {"week_start": "2026-11-30", "hours": 8.5},
+        {"week_start": "2026-12-14", "hours": 5, "recovery": True},
+        {"week_start": "2026-12-21", "recovery": True}]})["data"]
+    assert r["saved"] == 4
+    assert cal.events[3]["time_target"] == 28800 and cal.events[3]["load_target"] == 300
+    new = [e for e in cal.events.values() if e["category"] == "TARGET" and e["start_date_local"].startswith("2026-11-30")]
+    assert len(new) == 1 and new[0]["time_target"] == 30600
+    notes = [e for e in cal.events.values() if e["category"] == "NOTE" and "erholung" in e["name"].lower()]
+    assert sorted(n["start_date_local"][:10] for n in notes) == ["2026-12-14", "2026-12-21"]  # no duplicate in week of Dec 14
+    call(c, "save_week_targets", {"weeks": [{"week_start": "2026-12-14", "recovery": False}]})
+    assert 4 not in cal.events and 6 in cal.events
+    assert call(c, "save_week_targets", {"weeks": [{"week_start": "2026-11-24", "hours": 5}]})["isError"]  # not a Monday
+    assert call(c, "save_week_targets", {"weeks": [{"week_start": "2026-11-30"}]})["isError"]
+
+
+def test_delete_season_entries_only_plan_target_recovery_from_today(mk):
+    c, cal = mk(SEASON_CAL)
+    r = call(c, "delete_season_entries", {"event_ids": [2, 3, 4, 1, 5, 6, 7, 999]})["data"]
+    assert sorted(d["event_id"] for d in r["deleted"]) == [2, 3, 4]
+    assert sorted(x["event_id"] for x in r["refused"]) == [1, 5, 6, 7, 999]
+    assert all(i in cal.events for i in (1, 5, 6, 7))
