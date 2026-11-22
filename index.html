@@ -336,6 +336,11 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <label class="chk"><input type="checkbox" id="btuse" checked> send speed and incline to treadmill when connected</label>
   </div></div>
 
+  <div class="modal" id="startwarn" hidden role="alertdialog" aria-modal="true" aria-label="Devices not connected"><div class="card">
+    <div class="phead"><h3 class="lbl">Not everything is connected</h3></div>
+    <ul id="swlist" style="margin:8px 0 16px 18px;line-height:1.6"></ul>
+    <div class="fbfoot"><button class="ghost" id="swcancel">Cancel</button><button class="hl" id="swgo">Start anyway</button></div>
+  </div></div>
   <div class="modal" id="fbmodal" hidden role="dialog" aria-modal="true" aria-label="Workout-Feedback"><div class="card">
     <div class="phead"><h3 class="lbl">Workout-Feedback</h3></div>
     <div class="fbsec"><span class="lbl">RPE <span class="muted">1 very easy · 10 maximal</span></span><div class="seg rpe" id="fbrpe"></div></div>
@@ -789,7 +794,14 @@ function elapsed(){const now=S.paused?S.pauseAt:Date.now();return(now-S.t0-S.pau
 function curIdx(e){let i=0;while(i+1<B.length&&e>=B[i+1].t0)i++;return i}
 function logEv(){S.events.push({t:Math.round(elapsed()*10)/10,speed:S.speed,incline:S.incline})}
 function setBlockVals(i){S.speed=B[i].speed;S.incline=B[i].incline}
-$("start").onclick=()=>{if(!(W&&W.free)){try{localStorage.setItem("tc_json",$("json").value)}catch(e){}}
+const hrOn=()=>!!(HR.dev&&HR.dev.gatt&&HR.dev.gatt.connected);
+function missingDevices(){const m=[];if(!(BLE.cp&&BLE.dev&&BLE.dev.gatt&&BLE.dev.gatt.connected))m.push("Treadmill is not connected. Speed and incline will not be controlled by the app.");else if(!BLE.on())m.push("Treadmill control is switched off. Speed and incline will not be controlled by the app.");
+ if(!hrOn()&&!(BLE.live&&BLE.live.hr>0))m.push("Heart-rate strap is not connected. No heart rate will be recorded.");return m}
+$("start").onclick=()=>{const m=missingDevices();if(!m.length){startRun();return}
+ $("swlist").innerHTML=m.map(t=>"<li>"+t+"</li>").join("");$("startwarn").hidden=false};
+$("swcancel").onclick=()=>{$("startwarn").hidden=true};
+$("swgo").onclick=()=>{$("startwarn").hidden=true;startRun()};
+function startRun(){if(!(W&&W.free)){try{localStorage.setItem("tc_json",$("json").value)}catch(e){}}
  FB={rpe:null,feel:null,note:"",carbs:[]};LAST_LOG=null;$("fbnote").value="";renderFB();
  try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){AC=null}
  try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(l=>wl=l).catch(()=>{})}catch(e){}
@@ -804,7 +816,7 @@ $("start").onclick=()=>{if(!(W&&W.free)){try{localStorage.setItem("tc_json",$("j
  if(BLE.on()){S.hold=true;$("banner").className="banner soon";$("banner").textContent="Starting treadmill…";
   BLE.begin(B[0].speed,B[0].incline).then(()=>{
    if(S){S.t0=Date.now();S.pausedMs=0;S.skip=0;S.hold=false;S.events=[];S.hr=[];S.idx=-1;S.alerted=-1;S.fz.forEach(f=>f.st=0);S.fa=S.fp=-1;beep(1,660)}})}
- beep(1,660);tick=setInterval(loop,200);clearInterval(hrt);hrt=setInterval(hrLoop,1000);hrLoop();loop()};
+ beep(1,660);tick=setInterval(loop,200);clearInterval(hrt);hrt=setInterval(hrLoop,1000);hrLoop();loop()}
 function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(S.free)S.end=Math.max(1800,Math.ceil((e+300)/300)*300);else if(e>=S.end){finish(false);return}
  const i=curIdx(e),b=B[i],nb=B[i+1],rem=b.t0+b.dur-e;
  if(i!==S.idx){S.idx=i;setBlockVals(i);logEv();S.resent=false;S.mis=0;if(i>0)BLE.send(S.speed,S.incline);if(i>0){beep(3,1175);vib([300,100,300]);say(`Now ${b.speed} kilometres per hour, incline ${b.incline} percent`);S.nowUntil=Date.now()+6000}}
