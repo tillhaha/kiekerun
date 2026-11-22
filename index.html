@@ -109,8 +109,8 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .mk{position:absolute;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:var(--chart-bg);border:2.5px solid var(--hrline);box-sizing:border-box}
 .mv{position:absolute;font:700 15px var(--fd);color:var(--ink);transform:translate(-50%,-135%);font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
 .mv.b{transform:translate(-50%,45%)}
-.bks{display:flex;gap:2px;margin:0 34px;min-height:46px;flex:none}
-.bks span{background:var(--surface-2);display:flex;flex-direction:column;justify-content:center;gap:1px;padding:3px 7px;overflow:hidden;white-space:nowrap;border-radius:2px;min-width:0;flex-basis:0}
+.bks{position:relative;margin:0 34px;height:46px;flex:none}
+.bks span{position:absolute;top:0;bottom:0;box-sizing:border-box;background:var(--surface-2);display:flex;flex-direction:column;justify-content:center;gap:1px;padding:3px 7px;overflow:hidden;white-space:nowrap;border-radius:2px;min-width:0}
 .bks b{font:700 16px var(--fd);color:var(--ink);overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .bks i{font:600 11px var(--ft);font-style:normal;letter-spacing:.03em;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
 .c-plan{fill:none;stroke:var(--chart-ink);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
@@ -706,9 +706,9 @@ function hrchart(blocks,hr,tot,o={}){
  const st=niceStep(tot);let xl="";for(let t=0;t<=tot;t+=st)xl+=`<span style="left:${t/tot*100}%">${fmt(t)}</span>`;
  const zr=z=>z>1?(ZN[z-2]+1)+"–"+ZN[z-1]+" bpm":"≤"+ZN[0]+" bpm";
  const strip=blocks.map(b=>{const w=b.dur/tot,sv=b.speed!=null?(+b.speed).toFixed(1):null,iv=b.incline!=null?Math.round(+b.incline*10)/10:null,
-   v=sv==null?"":w>=.12?sv+" km/h"+(iv!=null?" · "+iv+" %":""):w>=.08?sv+(iv!=null?" · "+iv+"%":""):w>=.035?sv:"",
+   v=sv==null?"":w>=.12?sv+" km/h"+(iv!=null?" · "+iv+" %":""):w>=.08?sv+(iv!=null?" · "+iv+"%":""):w>=.055?sv:"",
    sub=w>=.09?b.label+(ZN&&zoneOfLabel(b.label)?" · "+zr(zoneOfLabel(b.label)):""):"";
-  return `<span style="flex:${Math.max(b.dur,1)}" title="${b.label}${sv!=null?" · "+sv+" km/h"+(iv!=null?" · "+iv+" %":""):""}">${v?`<b>${v}</b>`:sub?`<i>${sub}</i>`:""}</span>`}).join("");
+  return `<span style="left:${(b.t0/tot*100).toFixed(3)}%;width:calc(${(b.dur/tot*100).toFixed(3)}% - 2px)" title="${b.label}${sv!=null?" · "+sv+" km/h"+(iv!=null?" · "+iv+" %":""):""}">${v?`<b>${v}</b>`:sub?`<i>${sub}</i>`:""}</span>`}).join("");
  const cap=blocks.length>=5?"HR · avg of last 60 s per block":"HR · avg per "+(tot<=3600?5:tot<=7200?10:15)+" min";
  return `<div class="chartbox${o.fill?" fill":""}" style="--ch:${o.h||150}px"><div class="pw">${yl}<div class="plot"><svg viewBox="0 0 1000 100" preserveAspectRatio="none">${grid}${rects}${under}${over}<path class="c-hr" d="${d}"/></svg>${mk}<div class="hrleg">${capx||cap}</div>${o.playhead?`<div class="playhead" style="left:${(now/tot*100).toFixed(2)}%"></div>`:""}</div></div><div class="bks">${strip}</div><div class="xl">${xl}</div></div>`}
 function runProfile(now){const P=[],ev=S.events||[];for(let k=0;k<ev.length;k++){const t0=ev[k].t,t1=Math.min(now,k+1<ev.length?ev[k+1].t:now);if(t1>t0)P.push({t0,t1,speed:ev[k].speed,incline:ev[k].incline})}
