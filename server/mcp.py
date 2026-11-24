@@ -17,12 +17,14 @@ from __future__ import annotations
 import json
 import math
 import re
+import struct
 from datetime import timedelta
 from typing import Callable
 
 from server.ratelimit import RateLimiter
 from tcoach.coach_data import (ACTIVITY_FIELDS, RECOVERY_WORDS, SEASON_CATEGORIES, STREAM_TYPES, parse_day, plan_vs_actual, resolve_range, summarize_activity,
                                summarize_activity_detail, summarize_season, summarize_streams, summarize_wellness, summarize_workout_doc, summarize_zones)
+from tcoach.fit_sensors import device_infos, hr_source
 from tcoach.intervals_client import IntervalsClient, IntervalsError, slug
 from tcoach.intervals_text import to_intervals_text
 from tcoach.machine import has_errors, validate
@@ -42,7 +44,9 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {**_RANGE, "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT,
                      "description": "Max activities (default 60)"}}}},
     {"name": "get_activity",
-     "description": "One activity in detail incl. intervals/laps and HR zone times. Use the id from get_activities.",
+     "description": "One activity in detail incl. intervals/laps and HR zone times. Use the id from get_activities. "
+                    "hr_source says where the heart rate came from: chest (external strap/sensor, reliable), wrist (watch's "
+                    "optical sensor: treat HR, drift and zones with caution) or unknown.",
      "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}},
     {"name": "get_activity_streams",
      "description": "Heart rate over time (plus speed km/h and grade %) of one activity, averaged per step_s seconds, as rows "
@@ -429,6 +433,29 @@ def _write(name: str, args: dict, cl: IntervalsClient, today: str) -> dict:
     raise ToolError(f"unknown tool: {name}")
 
 
+_HR_SOURCE_CACHE: dict[str, dict] = {}
+
+
+def activity_hr_source(cl: IntervalsClient, aid: str, device: str | None = None) -> dict:
+    """chest / wrist / unknown from the device_info of the original FIT. KiekeRun treadmill runs always use the strap."""
+    if aid in _HR_SOURCE_CACHE:
+        return _HR_SOURCE_CACHE[aid]
+    if device is None:
+        a = cl.get_activity(aid, intervals=False)
+        device = a.get("device_name") or a.get("source")
+    if device == "KiekeRun":
+        res = {"hr_source": "chest", "hr_sensors": [{"name": "KiekeRun (Brustgurt)"}]}
+    else:
+        try:
+            res = hr_source(device_infos(cl.get_activity_file(aid)))
+        except (IntervalsError, ValueError, IndexError, struct.error) as exc:
+            return {"hr_source": "unknown", "hr_source_note": f"original file not readable: {str(exc)[:80]}"}
+    if len(_HR_SOURCE_CACHE) > 500:
+        _HR_SOURCE_CACHE.clear()
+    _HR_SOURCE_CACHE[aid] = res
+    return res
+
+
 def call_tool(name: str, args: dict, cl: IntervalsClient, today: str, allow_write: bool = False) -> dict:
     try:
         if name in WRITE_NAMES:
@@ -446,7 +473,8 @@ def call_tool(name: str, args: dict, cl: IntervalsClient, today: str, allow_writ
             aid = str(args.get("id") or "").strip()
             if not aid or "/" in aid or len(aid) > 40:
                 raise ValueError("id is required")
-            return _text(summarize_activity_detail(cl.get_activity(aid)))
+            a = cl.get_activity(aid)
+            return _text(summarize_activity_detail(a) | activity_hr_source(cl, aid, a.get("device_name") or a.get("source") or ""))
         if name == "get_activity_streams":
             aid = str(args.get("id") or "").strip()
             if not aid or "/" in aid or len(aid) > 40:

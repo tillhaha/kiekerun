@@ -241,3 +241,49 @@ def test_get_season_plan_tool_filters_and_defaults(mk):
     assert out["oldest"] == "2026-08-17" and out["newest"] == "2027-09-11"
     assert len(out["weeks"]) == 2 and len(out["phases"]) == 2
     assert http.calls[0][2]["oldest"] == "2026-08-17"
+
+
+def _fit_with_device_infos(infos):
+    """Minimal FIT file: one device_info definition (fields 0, 1, 2, 4, 25) + one data message per info."""
+    import struct
+    fields = [(0, 1, 2), (1, 1, 2), (2, 2, 0x84), (4, 2, 0x84), (25, 1, 0)]
+    body = bytes([0x40, 0, 0]) + struct.pack("<H", 23) + bytes([len(fields)]) + b"".join(bytes(f) for f in fields)
+    for i in infos:
+        body += bytes([0x00]) + struct.pack("<BBHHB", i.get(0, 0xFF), i.get(1, 0xFF), i.get(2, 0xFFFF), i.get(4, 0xFFFF), i.get(25, 0xFF))
+    header = bytes([12, 0x10]) + struct.pack("<H", 2100) + struct.pack("<I", len(body)) + b".FIT"
+    return header + body + b"\x00\x00"
+
+
+class RawResp(Resp):
+    def __init__(self, content):
+        super().__init__(200, None)
+        self.content = content
+
+
+def test_hr_source_from_fit_device_info():
+    from tcoach.fit_sensors import device_infos, hr_source
+    import gzip
+    wrist = _fit_with_device_infos([{0: 0, 25: 5}, {0: 4, 1: 10, 25: 5}])
+    assert hr_source(device_infos(wrist)) == {"hr_source": "wrist"}
+    strap = _fit_with_device_infos([{0: 4, 1: 10, 25: 5}, {0: 5, 1: 120, 2: 1, 4: 4369, 25: 1}])
+    assert hr_source(device_infos(gzip.compress(strap))) == {"hr_source": "chest", "hr_sensors": [{"via": "antplus", "name": "HRM 600"}]}
+    ble = _fit_with_device_infos([{0: 5, 1: 1, 25: 3}])
+    assert hr_source(device_infos(ble))["hr_sensors"] == [{"via": "bluetooth_low_energy"}]
+    assert hr_source(device_infos(_fit_with_device_infos([{0: 0, 25: 5}]))) == {"hr_source": "unknown"}
+
+
+def test_get_activity_reports_hr_source(mk, monkeypatch):
+    from server import mcp as mcpmod
+    monkeypatch.setattr(mcpmod, "_HR_SOURCE_CACHE", {})
+    d = {"id": "i7", "name": "Run", "device_name": "Garmin fenix 9 Pro", "start_date_local": "2026-11-23T08:00:00"}
+    fit = _fit_with_device_infos([{0: 4, 1: 10, 25: 5}])
+    c, http = mk({"/activity/i7": Resp(200, d), "/activity/i7/file": RawResp(fit)})
+    out = json.loads(rpc(c, "tools/call", {"name": "get_activity", "arguments": {"id": "i7"}}).json()["result"]["content"][0]["text"])
+    assert out["hr_source"] == "wrist"
+    k = {"id": "i8", "name": "Hike", "device_name": "KiekeRun", "start_date_local": "2026-11-23T08:00:00"}
+    c, http = mk({"/activity/i8": Resp(200, k)})
+    out = json.loads(rpc(c, "tools/call", {"name": "get_activity", "arguments": {"id": "i8"}}).json()["result"]["content"][0]["text"])
+    assert out["hr_source"] == "chest" and not any(u.endswith("/file") for _, u, _ in http.calls)
+    c, _ = mk({"/activity/i9": Resp(200, {"id": "i9", "device_name": "Garmin"})})
+    out = json.loads(rpc(c, "tools/call", {"name": "get_activity", "arguments": {"id": "i9"}}).json()["result"]["content"][0]["text"])
+    assert out["hr_source"] == "unknown"

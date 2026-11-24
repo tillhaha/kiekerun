@@ -136,6 +136,17 @@ class IntervalsClient:
         return self._request("GET", f"{self.base_url}/activity/{activity_id}", f"/activity/{activity_id}",
                              params={"intervals": "true" if intervals else "false"}) or {}
 
+    def get_activity_file(self, activity_id: str) -> bytes:
+        """The original uploaded file (FIT from Garmin; may come gzipped). Raw bytes, not JSON."""
+        path = f"/activity/{activity_id}/file"
+        try:
+            resp = self.http.request("GET", f"{self.base_url}{path}", auth=("API_KEY", self.api_key), timeout=60)
+        except requests.RequestException as exc:
+            raise IntervalsError(f"GET {path} failed: {exc.__class__.__name__}") from exc
+        if resp.status_code >= 400:
+            raise IntervalsError(f"GET {path} -> {resp.status_code}", resp.status_code)
+        return resp.content or b""
+
     def get_streams(self, activity_id: str, types: str) -> list[dict]:
         """Time series of one activity (time, heartrate, velocity_smooth, ...), a list of {type, data}."""
         path = f"/activity/{activity_id}/streams"
