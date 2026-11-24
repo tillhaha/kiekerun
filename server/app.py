@@ -39,6 +39,7 @@ from tcoach.intervals_client import IntervalsClient, IntervalsError
 from tcoach.intervals_text import parse_intervals_text
 from tcoach.machine import has_errors, validate
 from tcoach.models import Workout
+from tcoach.outdoor import build_model, is_outdoor_text, parse_outdoor, to_treadmill
 from tcoach.session import samples_from_log
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -153,6 +154,43 @@ def zones():
             "lthr": out[0].get("lthr") if out else None}
 
 
+_MODEL_CACHE: dict = {}
+
+
+def _hr_model(today: str):
+    """HR->speed fit from recent runs, cached for 30 min (it needs several stream downloads)."""
+    import time
+    hit = _MODEL_CACHE.get(today)
+    if hit and time.time() - hit[0] < 1800:
+        return hit[1]
+    m = _intervals_call(build_model, client(), today)
+    _MODEL_CACHE[today] = (time.time(), m)
+    return m
+
+
+def _outdoor_item(item: dict, e: dict, desc: str, day: str) -> None:
+    zs = summarize_zones(_intervals_call(client().athlete), "Run")["sport_settings"]
+    hz = (zs[0].get("hr_zones") if zs else None) or []
+    lthr = zs[0].get("lthr") if zs else None
+    item["where"] = "outdoor"
+    if len(hz) < 5:
+        item["warnings"].append("no HR zones configured in intervals.icu for Run")
+        return
+    steps, warns = parse_outdoor(desc, hz, lthr)
+    item["warnings"] += warns
+    if not steps:
+        return
+    model = _hr_model(today_local())
+    if not model:
+        item["warnings"].append("not enough recent runs with heart rate to derive treadmill speeds")
+        return
+    w = to_treadmill(e.get("name") or "Outdoor workout", steps, model)
+    w.where, w.date = "outdoor", item["date"]
+    item["workout"] = w.to_dict()
+    item["speed_model"] = {"activities": model["activities"], "samples": model["n"],
+                           "hr_range": [round(x) for x in model["hr_range"]]}
+
+
 @app.get("/api/planned", dependencies=[Depends(require_login)])
 def planned(date: str | None = None):
     """Planned workouts of a day as kiekerun JSON. Only workouts with '... @ X% incline' steps
@@ -167,7 +205,9 @@ def planned(date: str | None = None):
         item = {"event_id": e.get("id"), "name": e.get("name"), "date": (e.get("start_date_local") or "")[:10],
                 "workout": None, "warnings": []}
         desc = e.get("description") or ""
-        if "incline" not in desc:
+        if "incline" not in desc and is_outdoor_text(desc):
+            _outdoor_item(item, e, desc, day)
+        elif "incline" not in desc:
             item["warnings"].append("no incline steps in description; not a treadmill workout")
         else:
             try:

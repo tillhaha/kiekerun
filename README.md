@@ -105,6 +105,20 @@ intervals.icu fields: `icu_rpe`, `feel` (1 Strong ... 5 Weak, verify once in the
 Calories are estimated with the ACSM walking/running equations from speed, incline and body weight
 (`tcoach/calories.py`); vertical speed per block is computed from speed and incline, not measured by the treadmill.
 
+## Outdoor workouts on the treadmill
+
+"Today's workout" also loads workouts that were planned for outdoors (intervals.icu text with HR targets), e.g.
+
+    - Warm-up 10m Z1 HR
+    - Easy 60m Z2 HR
+    - Tempo 20m 85-92% LTHR
+
+Zones come from intervals.icu (Run zones and LTHR). The treadmill speed for a target HR is derived from your own recent runs
+(last 42 days, up to 10 runs): HR and speed of flat seconds after a 5 min warm-up are smoothed and fitted with a line, and the speed is read
+at the middle of the target band (incline 1 %). It needs about 5 min of usable data and a spread of >= 8 bpm, otherwise the
+workout is listed with a warning instead of guessing. The fit is cached for 30 min. A workout JSON may carry `"where": "treadmill" | "outdoor" | "both"`;
+converted workouts are tagged `outdoor`. Outdoor runs themselves need nothing from KiekeRun: the Garmin records them and intervals.icu imports them.
+
 ## Workout targets
 
 A workout may set `"target_distance_km": 8.5` and `"target_elevation_m": 400`. Without them the targets are derived from the blocks

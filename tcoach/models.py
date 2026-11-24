@@ -240,10 +240,13 @@ class Workout:
     notes: str = ""
     date: str | None = None
     fuel: list[Fuel] = field(default_factory=list)
+    where: str | None = None  # "treadmill" | "outdoor" | "both": where the workout is meant to be done
 
     def __post_init__(self):
         if self.mode not in MODES:
             raise ValueError(f"mode must be one of {MODES}, got {self.mode!r}")
+        if self.where not in (None, "treadmill", "outdoor", "both"):
+            raise ValueError(f"where must be treadmill, outdoor or both, got {self.where!r}")
 
     # --- construction -----------------------------------------------------
     @classmethod
@@ -259,6 +262,7 @@ class Workout:
             mode=d.get("mode", "run"),
             notes=str(d.get("notes", "")),
             date=d.get("date"),
+            where=d.get("where"),
         )
         w.fuel = parse_fuel(d.get("fuel"), w.duration_s)
         return w
@@ -273,6 +277,8 @@ class Workout:
             d["notes"] = self.notes
         if self.date:
             d["date"] = self.date
+        if self.where:
+            d["where"] = self.where
         if self.fuel:
             d["fuel"] = [f.to_dict() for f in self.fuel]
         return d

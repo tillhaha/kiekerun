@@ -648,13 +648,15 @@ async function API(path,opt){let r;try{r=await fetch(path,opt)}catch(e){throw Er
  let j=null;try{j=await r.json()}catch(e){}
  if(!r.ok)throw Error(j&&j.detail||(r.status===404?"backend not running (Coolify build pack must be Dockerfile)":"HTTP "+r.status));return j}
 function planMsg(t,err){const m=$("todaymsg");m.textContent=t;m.hidden=!t;m.style.color=err?"var(--alert-tint-ink)":""}
+function loadedMsg(it){const m=it.speed_model;return "Loaded: "+it.name+(it.where==="outdoor"?" (outdoor workout, treadmill speeds estimated from your last "+(m?m.activities+" runs":"runs")+" at the target heart rate, adjust by feel)":"")}
 function useWorkout(it){$("json").value=JSON.stringify(it.workout,null,1);document.querySelectorAll(".recent button").forEach(b=>b.classList.remove("sel"));parse();PLANNED=it.event_id||null}
 $("todaybtn").onclick=async()=>{const b=$("todaybtn"),list=$("todaylist");b.disabled=true;list.innerHTML="";planMsg("Loading from intervals.icu…");
  try{const d=await API("/api/planned"),ok=d.items.filter(i=>i.workout);
   if(!d.items.length)planMsg("Nothing planned for "+d.date+" in intervals.icu.");
-  else if(!ok.length)planMsg("Found "+d.items.map(i=>i.name).join(", ")+" for "+d.date+", but no treadmill steps (incline) in it.",true);
-  else if(ok.length===1){useWorkout(ok[0]);planMsg("Loaded: "+ok[0].name)}
-  else{planMsg("Several workouts on "+d.date+", pick one:");ok.forEach(it=>{const x=document.createElement("button"),n=document.createElement("b");n.textContent=it.name||"Workout";x.appendChild(n);x.onclick=()=>{useWorkout(it);x.classList.add("sel");planMsg("Loaded: "+it.name)};list.appendChild(x)})}
+  else if(!ok.length){const w=d.items.find(i=>i.where==="outdoor"&&i.warnings.length);
+   planMsg(w?w.name+" is an outdoor workout, but: "+w.warnings.join("; "):"Found "+d.items.map(i=>i.name).join(", ")+" for "+d.date+", but no treadmill steps (incline) in it.",true)}
+  else if(ok.length===1){useWorkout(ok[0]);planMsg(loadedMsg(ok[0]))}
+  else{planMsg("Several workouts on "+d.date+", pick one:");ok.forEach(it=>{const x=document.createElement("button"),n=document.createElement("b");n.textContent=(it.name||"Workout")+(it.where==="outdoor"?" · outdoor":"");x.appendChild(n);x.onclick=()=>{useWorkout(it);x.classList.add("sel");planMsg(loadedMsg(it))};list.appendChild(x)})}
  }catch(e){planMsg("intervals.icu: "+e.message,true)}
  b.disabled=false};
 const HASH={setup:"#plan",run:"#run",done:"#summary"};
