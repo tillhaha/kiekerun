@@ -16,6 +16,7 @@ Build pack **Dockerfile**, port **8000**. Environment variables:
 | `INTERVALS_ATHLETE_ID` | e.g. `i123456` |
 | `KIEKERUN_USER`, `KIEKERUN_PASSWORD` | login for page and API (the API stays disabled without them) |
 | `TZ_NAME` | optional, default `Europe/Berlin` (what "today" means) |
+| `OPENROUTER_API_KEY`, `OPENROUTER_AUDIO_MODEL` | optional: server-side speech-to-text for the feedback note (Speak button records, converts to 16 kHz WAV, `POST /api/transcribe`; same setup as kieke.app). Without them the browser's own speech recognition is used if it has one |
 | `BODY_WEIGHT_KG` | optional fallback for the calorie estimate; normally the weight comes from the intervals.icu profile |
 | `MCP_TOKEN` | optional, at least 16 random characters. Enables the read-only coach connector at `/mcp/<MCP_TOKEN>` |
 | `TRUSTED_PROXY_HOPS` | optional, default `1`: reverse proxies in front of the app (Coolify's Traefik = 1; Cloudflare in front of it = 2). Decides which `X-Forwarded-For` entry counts as the client address |

@@ -646,12 +646,40 @@ $("fbundo").onclick=()=>{FB.carbs.pop();fbChanged()};
 $("fbnote").oninput=()=>{FB.note=$("fbnote").value;fbChanged()};
 const fbm=$("fbmodal");
 function openFB(){$("fbnote").value=FB.note;renderFB();fbm.hidden=false}
-function closeFB(){if(rec)rec.stop();fbm.hidden=true}
+function closeFB(){if(rec)rec.stop();if(vrec)vrec.cancel();fbm.hidden=true}
 $("fbbtn2").onclick=openFB;$("fbclose").onclick=closeFB;
 fbm.onclick=e=>{if(e.target===fbm)closeFB()};document.addEventListener("keydown",e=>{if(e.key==="Escape")closeFB()});
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const CANREC=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder&&(window.AudioContext||window.webkitAudioContext));
+let VOICE=false,vrec=null;
+const micOff=()=>{$("fbmic").textContent="Speak";$("fbmic").disabled=false};
 if(SR)$("fbmic").hidden=false;else $("fbmicmsg").textContent="Tip: dictate with the microphone key on the keyboard.";
-$("fbmic").onclick=()=>{if(rec){rec.stop();return}
+// server speech-to-text (OpenRouter audio model, like kieke.app): record -> 16 kHz mono WAV -> /api/transcribe
+async function wavB64(ab){const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC();let dec;
+ try{dec=await new Promise((ok,no)=>{const p=ctx.decodeAudioData(ab,ok,no);if(p&&p.catch)p.catch(no)})}finally{try{ctx.close()}catch(e){}}
+ const SR_=16000,OC=window.OfflineAudioContext||window.webkitOfflineAudioContext,off=new OC(1,Math.max(1,Math.ceil(dec.duration*SR_)),SR_),src=off.createBufferSource();
+ src.buffer=dec;src.connect(off.destination);src.start();
+ const out=await new Promise((ok,no)=>{const p=off.startRendering(ok,no);if(p&&p.then)p.then(ok,no)}),x=out.getChannelData(0),buf=new ArrayBuffer(44+x.length*2),v=new DataView(buf);
+ const as=(o,t)=>{for(let i=0;i<t.length;i++)v.setUint8(o+i,t.charCodeAt(i))};
+ as(0,"RIFF");v.setUint32(4,36+x.length*2,true);as(8,"WAVE");as(12,"fmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,SR_,true);v.setUint32(28,SR_*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);as(36,"data");v.setUint32(40,x.length*2,true);
+ for(let i=0;i<x.length;i++){const s=Math.max(-1,Math.min(1,x[i]));v.setInt16(44+i*2,s<0?s*0x8000:s*0x7fff,true)}
+ const b=new Uint8Array(buf);let bin="";for(let i=0;i<b.length;i+=0x8000)bin+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(bin)}
+async function startVoice(){
+ const stream=await navigator.mediaDevices.getUserMedia({audio:true}),mr=new MediaRecorder(stream),ch=[];
+ mr.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};
+ const rel=()=>stream.getTracks().forEach(t=>t.stop()),tmo=setTimeout(()=>{if(mr.state!=="inactive")mr.stop()},120000);
+ mr.onstop=async()=>{clearTimeout(tmo);rel();vrec=null;$("fbmic").textContent="Transcribing…";$("fbmic").disabled=true;
+  try{const blob=new Blob(ch,{type:mr.mimeType||"audio/mp4"});if(!blob.size)throw Error("no audio recorded");
+   const ab=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=()=>no(fr.error);fr.readAsArrayBuffer(blob)});
+   const b64=await wavB64(ab);
+   const d=await API("/api/transcribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio:b64,format:"wav"})});
+   const t=(d.text||"").trim();if(t){const n=$("fbnote");n.value=(n.value.replace(/\s+$/,"")+" "+t).trim();FB.note=n.value;fbChanged();$("fbmicmsg").textContent=""}else $("fbmicmsg").textContent="Nothing understood."}
+  catch(e){$("fbmicmsg").textContent="Speech input: "+(e.message||e.name||e)}finally{micOff()}};
+ mr.start();vrec={stop:()=>{if(mr.state!=="inactive")mr.stop()},cancel:()=>{mr.onstop=()=>{clearTimeout(tmo);rel();vrec=null;micOff()};if(mr.state!=="inactive")mr.stop()}};
+ $("fbmicmsg").textContent="";$("fbmic").textContent="Stop"}
+fetch("/api/voice").then(r=>r.ok?r.json():{}).then(d=>{if(d&&d.enabled&&CANREC){VOICE=true;$("fbmic").hidden=false;$("fbmicmsg").textContent=""}}).catch(()=>{});
+$("fbmic").onclick=()=>{if(vrec){vrec.stop();return}if(rec){rec.stop();return}
+ if(VOICE){startVoice().catch(e=>{vrec=null;micOff();$("fbmicmsg").textContent=(e&&e.name==="NotAllowedError")?"Microphone not allowed (browser settings).":"Microphone: "+(e.message||e.name||e)});return}
  const base=$("fbnote").value.replace(/\s+$/,"");let fin="";
  rec=new SR();rec.lang=SPEECH_LANG;rec.continuous=true;rec.interimResults=true;
  rec.onresult=e=>{let interim="";for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+" ";else interim+=r[0].transcript}

@@ -9,6 +9,7 @@ Environment (set in Coolify, never in the repo or the page):
   RATE_FAILS / RATE_WINDOW_S / RATE_LOCKOUT_S   failed-login lockout (default 10 fails in 900 s -> 900 s lockout)
   MCP_ALLOW_WRITE                           1 lets the connector plan/delete calendar workouts (default: read-only)
   MCP_RATE_PER_MIN                          valid connector requests per IP per minute (default 60)
+  OPENROUTER_API_KEY, OPENROUTER_AUDIO_MODEL   optional: speech-to-text for the feedback note (like kieke.app)
   KIEKERUN_DB                               run archive (SQLite), default /data/kiekerun.db; mount a volume on /data
 
 The API fails closed: without KIEKERUN_USER/KIEKERUN_PASSWORD every /api route
@@ -17,6 +18,7 @@ answers 503, so nobody can write to the calendar through a public URL.
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import tempfile
 from datetime import datetime, timezone
@@ -26,6 +28,7 @@ from zoneinfo import ZoneInfo
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import requests
 from pydantic import BaseModel
 
 from server import mcp as mcpmod
@@ -143,6 +146,60 @@ def health():
     """Connection test: can the server reach intervals.icu with the configured key?"""
     a = _intervals_call(client().athlete)
     return {"ok": True, "athlete_id": a.get("id"), "name": a.get("name")}
+
+
+# ---------------------------------------------------------------- speech to text
+_B64 = re.compile(r"^[A-Za-z0-9+/]+=*$")
+OR_BASE = "https://openrouter.ai/api/v1"
+TRANSCRIBE_PROMPT = ("Transcribe this voice message word for word, in the language it is spoken in. "
+                     "Reply with the transcript only - no quotes, no comments. "
+                     "If nothing is said, reply with an empty message.")
+
+
+def _voice_cfg() -> tuple[str, str]:
+    return os.environ.get("OPENROUTER_API_KEY", "").strip(), os.environ.get("OPENROUTER_AUDIO_MODEL", "").strip()
+
+
+class TranscribeIn(BaseModel):
+    audio: str  # base64 WAV, 16 kHz mono
+    format: str = "wav"
+
+
+@app.get("/api/voice", dependencies=[Depends(require_login)])
+def voice_status():
+    key, model = _voice_cfg()
+    return {"enabled": bool(key and model)}
+
+
+@app.post("/api/transcribe", dependencies=[Depends(require_login)])
+def transcribe(body: TranscribeIn):
+    key, model = _voice_cfg()
+    if not (key and model):
+        raise HTTPException(503, "Voice model is not configured (OPENROUTER_API_KEY / OPENROUTER_AUDIO_MODEL)")
+    if body.format not in ("wav", "mp3") or len(body.audio) < 100 or len(body.audio) > 8 * 1024 * 1024 \
+            or not _B64.match(body.audio):
+        raise HTTPException(400, "Invalid audio")
+    hdr = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    audio = {"data": body.audio, "format": body.format}
+    try:
+        r = requests.post(f"{OR_BASE}/audio/transcriptions", headers=hdr, timeout=60,
+                          json={"model": model, "input_audio": audio})
+        if r.ok:
+            return {"text": (r.json().get("text") or "").strip()}
+        if r.status_code in (402, 429):
+            raise HTTPException(502, "Transcription unavailable (credits or rate limit)")
+        r = requests.post(f"{OR_BASE}/chat/completions", headers=hdr, timeout=60, json={
+            "model": model, "max_tokens": 1024,
+            "messages": [{"role": "user", "content": [{"type": "text", "text": TRANSCRIBE_PROMPT},
+                                                       {"type": "input_audio", "input_audio": audio}]}]})
+        if not r.ok:
+            raise HTTPException(502, f"Transcription failed ({r.status_code})")
+        c = ((r.json().get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        if isinstance(c, list):
+            c = "".join(x.get("text", "") for x in c if isinstance(x, dict))
+        return {"text": c.strip()}
+    except requests.RequestException:
+        raise HTTPException(502, "Transcription service not reachable")
 
 
 @app.get("/api/zones", dependencies=[Depends(require_login)])

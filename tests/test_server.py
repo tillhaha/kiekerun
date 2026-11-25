@@ -261,3 +261,43 @@ def test_upload_rejects_bad_feedback(make2):
     c, _ = make2(_routes())
     assert c.post("/api/upload", json={"log": _log(feedback={"rpe": 11})}, headers=AUTH).status_code == 422
     assert c.post("/api/upload", json={"log": _log(blocks=[{"label": "x"}])}, headers=AUTH).status_code == 422
+
+
+def test_transcribe_not_configured(make, monkeypatch):
+    client, _ = make({})
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_AUDIO_MODEL", raising=False)
+    assert client.get("/api/voice", headers=AUTH).json() == {"enabled": False}
+    r = client.post("/api/transcribe", headers=AUTH, json={"audio": "A" * 200})
+    assert r.status_code == 503
+
+
+def test_transcribe_stt_and_chat_fallback(make, monkeypatch):
+    client, _ = make({})
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setenv("OPENROUTER_AUDIO_MODEL", "m")
+    assert client.get("/api/voice", headers=AUTH).json() == {"enabled": True}
+
+    class R:
+        def __init__(s, ok, j, code=200):
+            s.ok, s._j, s.status_code = ok, j, code
+        def json(s):
+            return s._j
+    calls = []
+
+    def fake(url, **kw):
+        calls.append(url)
+        if url.endswith("/audio/transcriptions"):
+            return R(True, {"text": " hallo welt "})
+        raise AssertionError(url)
+    monkeypatch.setattr(appmod.requests, "post", fake)
+    r = client.post("/api/transcribe", headers=AUTH, json={"audio": "A" * 200})
+    assert r.json() == {"text": "hallo welt"}
+
+    def fake2(url, **kw):
+        if url.endswith("/audio/transcriptions"):
+            return R(False, {}, 400)
+        return R(True, {"choices": [{"message": {"content": "zweiter weg"}}]})
+    monkeypatch.setattr(appmod.requests, "post", fake2)
+    assert client.post("/api/transcribe", headers=AUTH, json={"audio": "A" * 200}).json() == {"text": "zweiter weg"}
+    assert client.post("/api/transcribe", headers=AUTH, json={"audio": "bad!" * 50}).status_code == 400
