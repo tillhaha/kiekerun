@@ -105,6 +105,13 @@ intervals.icu fields: `icu_rpe`, `feel` (1 Strong ... 5 Weak, verify once in the
 Calories are estimated with the ACSM walking/running equations from speed, incline and body weight
 (`tcoach/calories.py`); vertical speed per block is computed from speed and incline, not measured by the treadmill.
 
+## Bluetooth reliability
+
+- The treadmill reconnects automatically (5 tries, growing delay) when the link drops during a run; control is requested again and the current speed and incline are re-sent. Pressing the connect button yourself disconnects for good.
+- A missing answer to a speed or incline command is retried once (only if no newer value was sent meanwhile).
+- Every treadmill and strap event (connection lost, reconnected, no answer, write failed) is stored with the run time in `log.conn`, shown as "Bluetooth events" on the summary and appended to the intervals.icu activity description.
+- The screen wake lock is requested again when the page becomes visible.
+
 ## Outdoor workouts on the treadmill
 
 "Today's workout" also loads workouts that were planned for outdoors (intervals.icu text with HR targets), e.g.

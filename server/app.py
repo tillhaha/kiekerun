@@ -345,7 +345,7 @@ def upload(body: UploadIn):
     cl = client()
     weight = body_weight_kg(cl)
     kcal = estimate_kcal(samples, weight) if weight else None
-    description = build_description(fb, stats, len(samples), kcal)
+    description = build_description(fb, stats, len(samples), kcal, body.log.get("conn") if isinstance(body.log.get("conn"), list) else None)
 
     ext_id = run_id(start)
     with tempfile.TemporaryDirectory() as tmp:

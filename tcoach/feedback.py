@@ -124,7 +124,7 @@ def _drift(win: list[Sample]):
     return int(round(hr[0])), int(round(hr[1])), round((ef1 - ef2) / ef1 * 100.0, 1)
 
 
-def build_description(fb: Feedback, stats: list[BlockStat], duration_s: int, kcal: int | None) -> str:
+def build_description(fb: Feedback, stats: list[BlockStat], duration_s: int, kcal: int | None, conn: list | None = None) -> str:
     """Text for the intervals.icu activity: the note first, then computed facts."""
     parts = []
     if fb.note:
@@ -159,4 +159,11 @@ def build_description(fb: Feedback, stats: list[BlockStat], duration_s: int, kca
         facts.append(f"Calories ~{kcal} kcal (estimate)")
     if facts:
         parts.append(" · ".join(facts))
+    lines = []
+    for c in (conn or [])[:12]:
+        if isinstance(c, dict) and c.get("msg"):
+            t = c.get("t")
+            lines.append(f"- {fmt_duration(int(t)) if isinstance(t, (int, float)) else '--:--'} · {c.get('src', '?')}: {str(c['msg'])[:80]}")
+    if lines:
+        parts.append("Connection events (Bluetooth)\n" + "\n".join(lines))
     return "\n\n".join(parts)

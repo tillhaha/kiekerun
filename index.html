@@ -440,6 +440,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div id="upok" class="upok" hidden role="status"></div>
     <div id="dsum" class="bigstats"></div>
     <div id="dsum2" class="substats"></div>
+    <div id="connbox" class="card" hidden></div>
     <div class="sum-body">
       <div class="card"><h2 class="lbl" id="dchartt">Planned vs actual</h2><div id="dchart"></div></div>
       <div class="card">
@@ -529,7 +530,9 @@ const U=n=>"0000"+n.toString(16)+"-0000-1000-8000-00805f9b34fb";
 // status bar: issues (red) are always shown; confirmations (neutral) never during the run
 let ST={text:"",issue:false,key:""},SCREEN="setup";
 function renderSt(){const el=$("btstat");el.textContent=ST.text;el.className=ST.issue?"":"info";el.hidden=!(ST.text&&(ST.issue||SCREEN!=="run"))}
-const BLE={dev:null,cp:null,live:{},q:Promise.resolve(),wait:null,cur:{s:0,i:0},
+const CONN=[];
+function clog(src,msg){let t=null;try{if(window.S&&S)t=Math.round(elapsed())}catch(e){}CONN.push({t,at:new Date().toISOString(),src,msg});if(CONN.length>200)CONN.shift()}
+const BLE={dev:null,cp:null,tries:0,userDc:false,last:{},live:{},q:Promise.resolve(),wait:null,cur:{s:0,i:0},
  on(){return !!(this.cp&&$("btuse").checked)},
  st(t,issue,key){ST={text:t||"",issue:!!issue,key:key||""};renderSt()},
  clr(key){if(ST.key===key)this.st("")},
@@ -537,21 +540,33 @@ const BLE={dev:null,cp:null,live:{},q:Promise.resolve(),wait:null,cur:{s:0,i:0},
   try{
    if(!navigator.bluetooth)throw Error("Web Bluetooth not available in this browser or frame");
    this.dev=await navigator.bluetooth.requestDevice({filters:[{services:[U(0x1826)]}]});
-   this.dev.addEventListener("gattserverdisconnected",()=>{this.cp=null;this.st("Treadmill disconnected. The belt keeps its last command: use the safety key or console to stop.",true);$("btcon").classList.remove("on")});
-   const srv=await this.dev.gatt.connect(),svc=await srv.getPrimaryService(U(0x1826));
-   this.cp=await svc.getCharacteristic(U(0x2ad9));
-   this.cp.addEventListener("characteristicvaluechanged",e=>this.resp(e.target.value));
-   await this.cp.startNotifications();
-   const d=await svc.getCharacteristic(U(0x2acd));d.addEventListener("characteristicvaluechanged",e=>this.data(e.target.value));await d.startNotifications();
-   try{const t=await svc.getCharacteristic(U(0x2ada));t.addEventListener("characteristicvaluechanged",e=>this.status(e.target.value));await t.startNotifications()}catch(e){}
-   $("btcon").classList.add("on");this.st("Connected to "+(this.dev.name||"treadmill")+". Control is requested when you press Start.");
+   this.dev.addEventListener("gattserverdisconnected",()=>this.lost());
+   this.userDc=false;this.tries=0;await this.hook();
+   this.st("Connected to "+(this.dev.name||"treadmill")+". Control is requested when you press Start.");
   }catch(e){this.cp=null;e.name==="NotFoundError"?this.st(""):this.st("Bluetooth: "+e.message,true)}},
+ async hook(){
+  const srv=await this.dev.gatt.connect(),svc=await srv.getPrimaryService(U(0x1826));
+  this.cp=await svc.getCharacteristic(U(0x2ad9));
+  this.cp.addEventListener("characteristicvaluechanged",e=>this.resp(e.target.value));
+  await this.cp.startNotifications();
+  const d=await svc.getCharacteristic(U(0x2acd));d.addEventListener("characteristicvaluechanged",e=>this.data(e.target.value));await d.startNotifications();
+  try{const t=await svc.getCharacteristic(U(0x2ada));t.addEventListener("characteristicvaluechanged",e=>this.status(e.target.value));await t.startNotifications()}catch(e){}
+  $("btcon").classList.add("on")},
+ lost(){this.cp=null;$("btcon").classList.remove("on");const run=!!(window.S&&S);clog("treadmill","connection lost");
+  if(run&&!this.userDc&&this.tries<5){this.tries++;this.st("Treadmill lost, reconnecting ("+this.tries+"/5)… the belt keeps its last command.",true);
+   setTimeout(async()=>{if(this.cp||!(window.S&&S)||this.userDc)return;
+    try{await this.hook();clog("treadmill","reconnected (attempt "+this.tries+")");this.tries=0;this.st("Treadmill reconnected.");
+     await this.cmd([0]);if(window.S&&S&&this.on())await this.set(S.speed,S.incline);setTimeout(()=>this.clr(""),4000)}
+    catch(e){clog("treadmill","reconnect failed: "+e.message);this.lost()}},1500*this.tries)}
+  else{if(run&&!this.userDc)clog("treadmill","gave up reconnecting");this.st("Treadmill disconnected. The belt keeps its last command: use the safety key or console to stop.",true)}},
  resp(v){if(v.getUint8(0)!==0x80)return;const op=v.getUint8(1),res=v.getUint8(2);if(this.wait&&this.wait.op===op){this.wait.ok(res)}},
- cmd(bytes){this.q=this.q.then(()=>new Promise(async ok=>{
+ cmd(bytes,retry=true){const op=bytes[0],seq=this.last[op]=(this.last[op]||0)+1;
+  this.q=this.q.then(()=>new Promise(async ok=>{
    if(!this.cp)return ok(-1);
-   const op=bytes[0];this.wait={op,ok:r=>{clearTimeout(tm);this.wait=null;if(r!==1)this.st("Treadmill answered "+r+" to command "+op,true);ok(r)}};
-   const tm=setTimeout(()=>{this.wait=null;this.st("No answer to command "+op,true);ok(-2)},3000);
-   try{await this.cp.writeValueWithResponse(new Uint8Array(bytes))}catch(e){clearTimeout(tm);this.wait=null;this.st("Write failed: "+e.message,true);ok(-3)}}));return this.q},
+   this.wait={op,ok:r=>{clearTimeout(tm);this.wait=null;if(r!==1){this.st("Treadmill answered "+r+" to command "+op,true);clog("treadmill","answered "+r+" to command "+op)}ok(r)}};
+   const tm=setTimeout(()=>{this.wait=null;clog("treadmill","no answer to command "+op);this.st("No answer to command "+op,true);ok(-2);
+    if(retry&&(op===2||op===3)&&this.last[op]===seq&&this.cp)setTimeout(()=>{clog("treadmill","retry of command "+op);this.cmd(bytes,false)},300)},3000);
+   try{await this.cp.writeValueWithResponse(new Uint8Array(bytes))}catch(e){clearTimeout(tm);this.wait=null;clog("treadmill","write failed: "+e.message);this.st("Write failed: "+e.message,true);ok(-3)}}));return this.q},
  async begin(sp,inc){await this.cmd([0]);this.live.speed=undefined;await this.cmd([7]);
   const t=Date.now();while(Date.now()-t<12000&&!(this.live.speed>0.4))await new Promise(r=>setTimeout(r,200));
   await new Promise(r=>setTimeout(r,500));await this.set(sp,inc)},
@@ -590,10 +605,10 @@ const HR={dev:null,bpm:null,t:0,tries:0,want:false,
  async hook(){
   const srv=await this.dev.gatt.connect(),svc=await srv.getPrimaryService(U(0x180d)),c=await svc.getCharacteristic(U(0x2a37));
   c.addEventListener("characteristicvaluechanged",e=>this.data(e.target.value));await c.startNotifications();
-  this.tries=0;$("hrcon").classList.add("on");BLE.st("Heart-rate strap connected: "+(this.dev.name||"strap")+". If no value appears, make sure the strap is not paired to another device.")},
- lost(){this.bpm=null;$("hrcon").classList.remove("on");
+  if(window.S&&S&&this.tries)clog("strap","reconnected");this.tries=0;$("hrcon").classList.add("on");BLE.st("Heart-rate strap connected: "+(this.dev.name||"strap")+". If no value appears, make sure the strap is not paired to another device.")},
+ lost(){this.bpm=null;$("hrcon").classList.remove("on");if(window.S&&S)clog("strap",this.user?"disconnected by user":"connection lost");
   if(this.want&&this.tries<5){this.tries++;BLE.st("Strap lost, reconnecting ("+this.tries+"/5)…",true);setTimeout(()=>{if(this.want)this.hook().catch(()=>this.lost())},2000*this.tries)}
-  else{const u=this.user;this.want=false;this.user=false;BLE.st(u?"":"Heart-rate strap disconnected.",!u)}},
+  else{const u=this.user;if(!u&&window.S&&S)clog("strap","gave up reconnecting");this.want=false;this.user=false;BLE.st(u?"":"Heart-rate strap disconnected.",!u)}},
  disconnect(){this.want=false;this.user=true;try{this.dev&&this.dev.gatt.disconnect()}catch(e){}},
  data(v){const f=v.getUint8(0),b=f&1?v.getUint16(1,true):v.getUint8(1);
   if(b>0&&b<250){this.bpm=b;this.t=Date.now()}else{this.bpm=null}}};
@@ -601,7 +616,7 @@ const hrNow=()=>{if(HR.bpm!=null&&Date.now()-HR.t<5000)return HR.bpm;const t=BLE
 $("hrcon").onclick=()=>{if(HR.dev&&HR.dev.gatt.connected)HR.disconnect();else HR.connect()};
 const am=$("alertmodal");$("alertbtn").onclick=()=>{am.hidden=false};$("alertclose").onclick=()=>{am.hidden=true};
 am.onclick=e=>{if(e.target===am)am.hidden=true};document.addEventListener("keydown",e=>{if(e.key==="Escape")am.hidden=true});
-$("btcon").onclick=()=>{if(BLE.cp&&BLE.dev){BLE.dev.gatt.disconnect()}else BLE.connect()};
+$("btcon").onclick=()=>{if(BLE.cp&&BLE.dev){BLE.userDc=true;BLE.dev.gatt.disconnect()}else BLE.connect()};
 
 // ---- workout feedback (RPE, feel, carbs, note) -> log.feedback -> intervals.icu
 const SPEECH_LANG="de-DE";
@@ -746,7 +761,7 @@ function renderSummary(log,e,km,plan){const free=!!(log.free||(log.workout&&log.
  const TG=tgtOf(log.workout,PB),pv=TG.up;
  const mv=log.machine&&log.machine.ascent_m!=null?`<span>Machine ascent<b>${Math.round(log.machine.ascent_m)} m</b></span>`:"";
  const big=(l,v,u)=>`<div class="stat"><span class="lbl">${l}</span><b>${v}${u?`<small>${u}</small>`:""}</b></div>`;
- $("dchartt").textContent=free?"Run":"Planned vs actual";$("dname").textContent=log.name;$("ddate").textContent="Workout complete · "+new Date(log.started_at).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+ $("dchartt").textContent=free?"Run":"Planned vs actual";{const cb=$("connbox"),cn=Array.isArray(log.conn)?log.conn:[];cb.hidden=!cn.length;cb.innerHTML=cn.length?`<h2 class="lbl">Bluetooth events</h2>`+cn.map(c=>`<div>${c.t==null?"--:--":fmt(c.t)} · ${c.src}: ${String(c.msg).replace(/</g,"&lt;")}</div>`).join(""):""}$("dname").textContent=log.name;$("ddate").textContent="Workout complete · "+new Date(log.started_at).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
  $("dsum").innerHTML=big("Time",fmt(e))+big("Distance",km.toFixed(2),"km")+big("Elevation gain","+"+Math.round(vt),"m")+big("Avg speed",(km/(Math.max(e,1)/3600)).toFixed(1),"km/h");
  const hs=(log.hr||[]).map(x=>x[1]),hv=hs.length?`<span>Avg HR<b>${Math.round(hs.reduce((a,b)=>a+b,0)/hs.length)} bpm</b></span><span>Max HR<b>${Math.max(...hs)} bpm</b></span>`:"";
  $("dsum2").innerHTML=(free?"":`<span>Planned time<b>${fmt(pt)}</b></span><span>Planned distance<b>${TG.km.toFixed(1)} km</b></span><span>Planned elevation<b>+${Math.round(pv)} m</b></span>`)+hv+mv;
@@ -792,6 +807,7 @@ var S=null;let AC=null,wl=null,tick=null,hrt=null;
 function beep(n,f=880,len=.18){if(!$("snd").checked||!AC)return;for(let i=0;i<n;i++){const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;o.connect(g);g.connect(AC.destination);const t=AC.currentTime+i*.28;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.4,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+len);o.start(t);o.stop(t+len+.02)}}
 const vib=p=>{try{if($("vib").checked&&navigator.vibrate)navigator.vibrate(p)}catch(e){}};
 const say=t=>{try{if($("spk").checked&&window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(t))}}catch(e){}};
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&window.S&&S){try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(l=>wl=l).catch(()=>{})}catch(e){}}});
 function elapsed(){const now=S.paused?S.pauseAt:Date.now();return(now-S.t0-S.pausedMs)/1000+S.skip}
 function curIdx(e){let i=0;while(i+1<B.length&&e>=B[i+1].t0)i++;return i}
 function logEv(){S.events.push({t:Math.round(elapsed()*10)/10,speed:S.speed,incline:S.incline})}
@@ -880,7 +896,7 @@ document.querySelectorAll("[data-a]").forEach(btn=>{
 $("pause").onclick=()=>{if(!S)return;if(S.paused){S.pausedMs+=Date.now()-S.pauseAt;S.paused=false;BLE.send(S.speed,S.incline);$("stop").disabled=true;$("stop").className="ghost";$("pause").textContent="Pause";$("banner").className="banner";$("banner").textContent="resumed"}
  else{S.paused=true;S.pauseAt=Date.now();$("stop").disabled=false;$("stop").className="";$("pause").textContent="Resume";$("banner").className="banner soon";$("banner").textContent="PAUSED — timer stopped, belt keeps running"}};
 $("stop").onclick=()=>S&&finish(true);
-function mkLog(e){const o=fbOut(),l={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,blocks:S.free?[{label:"Free run",t0:0,dur:Math.max(1,Math.round(e))}]:B.map(b=>({label:b.label,t0:b.t0,dur:b.dur})),machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc},workout:W};if(Object.keys(o).length)l.feedback=o;return l}
+function mkLog(e){const o=fbOut(),l={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,blocks:S.free?[{label:"Free run",t0:0,dur:Math.max(1,Math.round(e))}]:B.map(b=>({label:b.label,t0:b.t0,dur:b.dur})),conn:CONN.filter(c=>c.at>=S.started),machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc},workout:W};if(Object.keys(o).length)l.feedback=o;return l}
 function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);clearInterval(hrt);BLE.clr("hrgap");BLE.stop();try{wl&&wl.release()}catch(x){}
  if(!early)beep(4,1319);vib([500,150,500]);
  const log=mkLog(e);
