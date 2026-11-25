@@ -227,7 +227,8 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .grow .tile,.grow .fuelcard:not(.live){box-shadow:inset 0 4px 0 var(--rc)}
 .grow .tile.blk{box-shadow:inset 0 0 0 2px var(--highlight),inset 0 4px 0 var(--rc)}
 .grow .tile{padding:8px 16px;container-type:size}
-.grow .val .n{font-size:clamp(28px,46cqh,84px);line-height:.95}
+.grow .val .n{font-size:clamp(26px,4.6vh,84px);line-height:.95}
+@supports (container-type:size){.grow .val .n{font-size:clamp(28px,46cqh,84px)}}
 .grow .val .n small{font-size:15px;opacity:.6}
 .grow .val .u{margin-top:2px;line-height:1.1;min-height:1.1em}
 .grow .tile.blk .bar{margin-top:6px;flex:none}
@@ -544,7 +545,7 @@ const BLE={dev:null,cp:null,tries:0,userDc:false,last:{},live:{},q:Promise.resol
    this.dev.addEventListener("gattserverdisconnected",()=>this.lost());
    this.userDc=false;this.tries=0;await this.hook();
    this.st("Connected to "+(this.dev.name||"treadmill")+". Control is requested when you press Start.");
-  }catch(e){this.cp=null;e.name==="NotFoundError"?this.st(""):this.st("Bluetooth: "+e.message,true)}},
+  }catch(e){this.cp=null;e.name==="NotFoundError"?this.st(""):this.st("Bluetooth: "+(e.message||e.name||e),true)}},
  async hook(){
   const srv=await this.dev.gatt.connect(),svc=await srv.getPrimaryService(U(0x1826));
   this.cp=await svc.getCharacteristic(U(0x2ad9));
@@ -602,7 +603,7 @@ const HR={dev:null,bpm:null,t:0,tries:0,want:false,
    this.dev=await navigator.bluetooth.requestDevice({filters:[{services:[U(0x180d)]}]});
    this.dev.addEventListener("gattserverdisconnected",()=>this.lost());
    this.want=true;this.user=false;this.tries=0;await this.hook();
-  }catch(e){this.want=false;e.name==="NotFoundError"?BLE.st(""):BLE.st("Heart rate: "+e.message,true)}},
+  }catch(e){this.want=false;e.name==="NotFoundError"?BLE.st(""):BLE.st("Heart rate: "+(e.message||e.name||e),true)}},
  async hook(){
   const srv=await this.dev.gatt.connect(),svc=await srv.getPrimaryService(U(0x180d)),c=await svc.getCharacteristic(U(0x2a37));
   c.addEventListener("characteristicvaluechanged",e=>this.data(e.target.value));await c.startNotifications();
