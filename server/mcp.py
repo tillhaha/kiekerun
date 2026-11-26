@@ -28,6 +28,7 @@ from tcoach.fit_sensors import device_infos, hr_source
 from tcoach.intervals_client import IntervalsClient, IntervalsError, slug
 from tcoach.intervals_text import to_intervals_text
 from tcoach.machine import has_errors, validate
+from tcoach import mat as matmod
 from tcoach.models import Workout
 
 PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
@@ -78,6 +79,12 @@ TOOLS = [
      "description": "Per day: planned calendar entries (workouts, races, notes) next to the activities actually done. "
                     "Planned workouts get status done / open / no paired activity.",
      "inputSchema": {"type": "object", "properties": _RANGE}},
+    {"name": "get_mat_progress",
+     "description": "Progress of the mat workouts in KiekeRun: for 'me' (Muscular Endurance, WO 1-14, one block of 8-14 weekly "
+                    "sessions) and 'core15' the last done session (from activities) and the already planned ones (from the calendar), "
+                    "plus next_wo for ME. Use it before planning a week so the progression continues (WO + 1 per weekly session; "
+                    "after a missed week go back two WOs; recovery weeks: Core with 2 rounds).",
+     "inputSchema": {"type": "object", "properties": {}}},
 ]
 
 
@@ -94,6 +101,18 @@ WRITE_RATE = RateLimiter(limit=30, window_s=3600)  # all writes together, per ho
 
 _DATE = {"type": "string", "description": "Day of the workout, YYYY-MM-DD (yesterday up to 400 days ahead)"}
 WRITE_TOOLS = [
+    {"name": "save_mat_workout",
+     "description": "Plan a KiekeRun mat workout (no treadmill) in the intervals.icu calendar as a WeightTraining entry. "
+                    "kind 'me' = Muscular Endurance with wo 1-14 (the progression: load, rests and exercises per WO are built in; "
+                    "optional sets 4-8) or kind 'core15' = Core 15 (rounds 2-4, default 3; hard=true for 45 s/5 s). "
+                    "KiekeRun runs it with timers from the marker line it writes into the description. "
+                    "Saving the same name on the same day updates it in place. Use get_mat_progress first to pick the next WO.",
+     "inputSchema": {"type": "object", "required": ["date", "kind"], "properties": {
+         "date": _DATE, "kind": {"type": "string", "enum": ["me", "core15"]},
+         "wo": {"type": "integer", "minimum": 1, "maximum": 14}, "sets": {"type": "integer", "minimum": 4, "maximum": 8},
+         "rounds": {"type": "integer", "minimum": 2, "maximum": 4}, "hard": {"type": "boolean"},
+         "notes": {"type": "string", "maxLength": 1000}}},
+     "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True}},
     {"name": "save_treadmill_workout",
      "description": "Plan a treadmill workout for KiekeRun in the intervals.icu calendar. Blocks have speed (km/h) and incline (%) "
                     "and are checked against the treadmill limits. Saving the same name on the same day updates it in place. "
@@ -252,6 +271,24 @@ def _write(name: str, args: dict, cl: IntervalsClient, today: str) -> dict:
         ev = cl.push_planned([(w, day)])[0]
         return _text({"saved": True, "event_id": ev.get("id"), "date": day, "name": w.name,
                       "duration_min": round(w.duration_s / 60.0, 1), "description": to_intervals_text(w)})
+    if name == "save_mat_workout":
+        day = _check_date(args.get("date"), today)
+        kind = args.get("kind")
+        kw = {k: args.get(k) for k in ("wo", "sets", "rounds") if args.get(k) is not None}
+        if args.get("hard"):
+            kw["hard"] = True
+        if kind == "me" and "wo" not in kw:
+            raise ValueError("wo (1-14) is required for kind me")
+        w = matmod.build(kind, **kw)
+        notes = args.get("notes") or ""
+        if not isinstance(notes, str) or len(notes) > 1000:
+            raise ValueError("notes must be text of at most 1000 characters")
+        desc = matmod.marker(kind, **kw) + "\n" + matmod.overview(w) + (("\n\n" + notes) if notes else "")
+        ev = {"category": "WORKOUT", "start_date_local": f"{day}T00:00:00", "type": "WeightTraining", "name": w["name"],
+              "description": desc, "moving_time": round(w["duration_s"]), "external_id": f"mat-{day}-{slug(w['name'])}"}
+        res = cl.upsert_event(ev)
+        return _text({"saved": True, "updated_existing": bool(res.get("_updated")), "event_id": res.get("id"),
+                      "date": day, "name": w["name"], "duration_min": round(w["duration_s"] / 60)})
     if name == "save_planned_workout":
         day = _check_date(args.get("date"), today)
         title = str(args.get("name") or "").strip()
@@ -462,6 +499,8 @@ def call_tool(name: str, args: dict, cl: IntervalsClient, today: str, allow_writ
             if not allow_write:
                 raise ToolError("writing is disabled on this server (set MCP_ALLOW_WRITE=1)")
             return _write(name, args, cl, today)
+        if name == "get_mat_progress":
+            return _text(matmod.progress(cl, today))
         if name == "get_activities":
             oldest, newest = resolve_range(args, today)
             limit = args.get("limit", 60)

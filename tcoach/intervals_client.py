@@ -180,6 +180,10 @@ class IntervalsClient:
         """Partial update (icu_rpe, feel, description, carbs_ingested, ...). Not athlete-scoped in the API."""
         return self._request("PUT", f"{self.base_url}/activity/{activity_id}", f"/activity/{activity_id}", json=fields)
 
+    def create_manual_activity(self, ev: dict) -> dict:
+        """Activity without a file (strength / mat sessions): type, start, duration, name, description."""
+        return self._call("POST", "/activities/manual", json=ev)
+
     def upload_activity(self, fit_path, name: str | None = None, description: str | None = None,
                         external_id: str | None = None, paired_event_id: int | None = None,
                         device_name: str | None = None, dry_run: bool = False) -> dict:

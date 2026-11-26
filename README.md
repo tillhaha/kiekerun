@@ -171,3 +171,23 @@ and "TT last 20 min", 10 min cool-down). Start at 10 km/h and adjust speed by fe
 Run it rested, at least 72 h after the drift test. When the "TT last 20 min" block was run for at least 15 min with HR, the
 activity description gets a line `LT HR estimate 168 bpm` (average HR of that block). Together with the drift-test AeT this
 gives the Ten Percent Test: (LT - AeT) / LT.
+
+
+## Mat workouts (Muscular Endurance, Core 15)
+
+`/mat` (button "Mat workouts" on the Plan screen) runs strength sessions without the treadmill, on iPhone or MacBook.
+Everything runs on timers (big countdown, rep counter, sound, vibration, wake lock); pause, +10 s, back and skip are always available.
+Warm-up get-ups and burpees are the only steps you confirm with "Done".
+
+* **ME** (Muscular Endurance, WO 1-14): exercises, load, rests and sets follow the progression table in `tcoach/mat.py`
+  (from the training principles doc). Time per set of 10 is doubled compared with the book (20 s; goblet squat 30 s).
+  Box step-up and front lunge: right side, switch pause, left side. Goblet squat and kettlebell swing join from WO 4.
+* **Core 15**: 2 min warm-up, 3 rounds of 5 exercises, 40 s work / 10 s change (hard: 45/5, 2-4 rounds).
+* **Planning:** the planner writes a calendar entry (WeightTraining) whose description starts with the marker line
+  `KiekeRun: me wo=5 sets=6` or `KiekeRun: core15 rounds=3`. MCP tools: `save_mat_workout` (write) and `get_mat_progress`
+  (read: last done and already planned WO, next ME WO). `GET /api/planned` returns such entries as `where: "mat"`, so the page
+  offers "Planned today" and pairs the finished session with the planned entry.
+* **Done:** RPE and Feel (required) plus note; the upload creates a file-less WeightTraining activity in intervals.icu
+  (`POST /api/mat/upload`) with the marker, so the progression continues from what you actually did.
+* **Exercise graphics (optional):** put `<exercise-key>.png|jpg|webp|svg|gif` into `$KIEKERUN_IMG_DIR` (default `/data/img`),
+  e.g. `dead-bug.png`, `box-step-up.png`, `side-plank-right.png`. Missing images are simply not shown.

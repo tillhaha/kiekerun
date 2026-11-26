@@ -365,7 +365,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
       <div class="card loadcol">
         <h2 class="lbl">Load workout</h2>
         <button class="pri" id="todaybtn">Today's workout</button>
-        <div class="recent"><button id="freebtn" type="button"><b>Free run</b></button></div>
+        <div class="recent"><button id="freebtn" type="button"><b>Free run</b></button><button id="matbtn" type="button"><b>Mat workouts</b></button></div>
         <div class="muted" id="todaymsg" hidden></div>
         <div class="recent" id="todaylist"></div>
         <h2 class="lbl">Examples</h2>
@@ -696,6 +696,7 @@ async function API(path,opt){let r;try{r=await fetch(path,opt)}catch(e){throw Er
 function planMsg(t,err){const m=$("todaymsg");m.textContent=t;m.hidden=!t;m.style.color=err?"var(--alert-tint-ink)":""}
 function loadedMsg(it){const m=it.speed_model;return "Loaded: "+it.name+(it.where==="outdoor"?" (outdoor workout, treadmill speeds estimated from your last "+(m?m.activities+" runs":"runs")+" at the target heart rate, adjust by feel)":"")}
 function useWorkout(it){$("json").value=JSON.stringify(it.workout,null,1);document.querySelectorAll(".recent button").forEach(b=>b.classList.remove("sel"));parse();PLANNED=it.event_id||null}
+$("matbtn").onclick=()=>{location.href="/mat"};
 $("todaybtn").onclick=async()=>{const b=$("todaybtn"),list=$("todaylist");b.disabled=true;list.innerHTML="";planMsg("Loading from intervals.icu…");
  try{const d=await API("/api/planned"),ok=d.items.filter(i=>i.workout);
   if(!d.items.length)planMsg("Nothing planned for "+d.date+" in intervals.icu.");

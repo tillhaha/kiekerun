@@ -21,7 +21,7 @@ import os
 import re
 import secrets
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -38,6 +38,7 @@ from tcoach.calories import estimate_kcal
 from tcoach.coach_data import summarize_zones
 from tcoach.feedback import block_stats, build_description, parse_feedback
 from tcoach.fit_writer import write_fit
+from tcoach import mat as matmod
 from tcoach.intervals_client import IntervalsClient, IntervalsError
 from tcoach.intervals_text import parse_intervals_text
 from tcoach.machine import has_errors, validate
@@ -262,6 +263,14 @@ def planned(date: str | None = None):
         item = {"event_id": e.get("id"), "name": e.get("name"), "date": (e.get("start_date_local") or "")[:10],
                 "workout": None, "warnings": []}
         desc = e.get("description") or ""
+        mk = matmod.parse_marker(desc)
+        if mk:
+            try:
+                item["where"], item["mat"] = "mat", matmod.build(mk[0], **mk[1])
+            except ValueError as exc:
+                item["warnings"].append(str(exc))
+            out.append(item)
+            continue
         if "incline" not in desc and is_outdoor_text(desc):
             _outdoor_item(item, e, desc, day)
         elif "incline" not in desc:
@@ -295,6 +304,90 @@ def plan(body: PlanIn):
         raise HTTPException(422, "; ".join(str(i) for i in issues))
     res = _intervals_call(client().push_planned, [(w, body.date)])
     return {"ok": True, "event": res[0]}
+
+
+@app.get("/mat")
+def mat_page(request: Request, c: HTTPBasicCredentials | None = Depends(basic)):
+    user, pw = _creds()
+    if user and pw and not authenticate(request, c):
+        raise HTTPException(401, "login required", headers={"WWW-Authenticate": 'Basic realm="kiekerun"'})
+    return FileResponse(ROOT / "mat.html", media_type="text/html", headers={"Cache-Control": "no-cache"})
+
+
+# ---------------------------------------------------------------- mat workouts (ME, Core 15)
+@app.get("/api/mat/workout", dependencies=[Depends(require_login)])
+def mat_workout(kind: str, wo: int | None = None, sets: int | None = None, rounds: int | None = None,
+                hard: int = 0, warmup_min: int | None = None):
+    try:
+        return matmod.build(kind, wo=wo, sets=sets, rounds=rounds, hard=bool(hard), warmup_min=warmup_min)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@app.get("/api/mat/progress", dependencies=[Depends(require_login)])
+def mat_progress():
+    return matmod.progress(client(), today_local())
+
+
+class MatUploadIn(BaseModel):
+    kind: str
+    wo: int | None = None
+    sets: int | None = None
+    rounds: int | None = None
+    hard: bool = False
+    started_at: str
+    duration_s: int
+    feedback: dict | None = None
+    paired_event_id: int | None = None
+
+
+@app.post("/api/mat/upload", dependencies=[Depends(require_login)])
+def mat_upload(body: MatUploadIn):
+    """Finished mat session -> a file-less WeightTraining activity (pairs with the planned entry)."""
+    try:
+        w = matmod.build(body.kind, wo=body.wo, sets=body.sets, rounds=body.rounds, hard=body.hard)
+        start = datetime.fromisoformat(body.started_at.replace("Z", "+00:00"))
+        fb = parse_feedback(body.feedback)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, str(exc))
+    if not 60 <= body.duration_s <= 4 * 3600:
+        raise HTTPException(422, "duration_s must be 60 s - 4 h")
+    local = start.astimezone(ZoneInfo(os.environ.get("TZ_NAME", "Europe/Berlin")))
+    kw = {k: v for k, v in (("wo", body.wo), ("sets", body.sets), ("rounds", body.rounds)) if v is not None}
+    if body.hard:
+        kw["hard"] = True
+    desc = matmod.marker(body.kind, **kw) + "\n" + matmod.overview(w)
+    if fb.note:
+        desc += "\n\n" + fb.note
+    ev = {"start_date_local": local.strftime("%Y-%m-%dT%H:%M:%S"), "type": "WeightTraining", "name": w["name"],
+          "description": desc, "moving_time": body.duration_s, "elapsed_time": body.duration_s,
+          "external_id": "kiekerun-mat-" + run_id(start)}
+    if body.paired_event_id:
+        ev["paired_event_id"] = body.paired_event_id
+    cl = client()
+    res = _intervals_call(cl.create_manual_activity, ev)
+    aid = res.get("id") if isinstance(res, dict) else None
+    fields = {k: v for k, v in (("icu_rpe", fb.rpe), ("feel", fb.feel)) if v}
+    update_error = None
+    if aid and fields:
+        try:
+            cl.update_activity(aid, fields)
+        except IntervalsError as exc:
+            update_error = str(exc)
+    return {"ok": True, "id": aid, "updated": sorted(fields), "update_error": update_error}
+
+
+@app.get("/api/mat/img/{name}", dependencies=[Depends(require_login)])
+def mat_img(name: str):
+    """Optional exercise graphics: put <key>.png (or jpg/webp/svg/gif) into $KIEKERUN_IMG_DIR (default /data/img)."""
+    if not re.fullmatch(r"[a-z0-9-]{1,60}", name):
+        raise HTTPException(404, "no image")
+    base = Path(os.environ.get("KIEKERUN_IMG_DIR", "/data/img"))
+    for ext in ("png", "jpg", "jpeg", "webp", "svg", "gif"):
+        f = base / f"{name}.{ext}"
+        if f.is_file():
+            return FileResponse(f, headers={"Cache-Control": "max-age=3600"})
+    raise HTTPException(404, "no image")
 
 
 _RUNS: dict[str, RunStore | None] = {}

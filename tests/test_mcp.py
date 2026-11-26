@@ -71,7 +71,7 @@ def test_initialize_list_ping_and_notification(mk):
     assert r["protocolVersion"] == "2025-03-26" and r["capabilities"] == {"tools": {}}
     assert rpc(c, "initialize", {"protocolVersion": "1999"}).json()["result"]["protocolVersion"] == "2025-06-18"
     names = [t["name"] for t in rpc(c, "tools/list").json()["result"]["tools"]]
-    assert names == ["get_activities", "get_activity", "get_activity_streams", "get_wellness", "get_zones", "get_planned_workout", "get_season_plan", "get_plan_vs_actual"]
+    assert names == ["get_activities", "get_activity", "get_activity_streams", "get_wellness", "get_zones", "get_planned_workout", "get_season_plan", "get_plan_vs_actual", "get_mat_progress"]
     assert rpc(c, "ping").json()["result"] == {}
     assert rpc(c, "notifications/initialized", id_=None).status_code == 202
     assert rpc(c, "nope").json()["error"]["code"] == -32601

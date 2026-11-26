@@ -4,7 +4,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY tcoach ./tcoach
 COPY server ./server
-COPY index.html .
+COPY index.html mat.html ./
 RUN mkdir -p /data
 ENV PYTHONUNBUFFERED=1 TZ_NAME=Europe/Berlin
 EXPOSE 8000
