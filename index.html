@@ -113,6 +113,7 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 .bks{position:relative;margin:0 34px;height:46px;flex:none}
 .bks span{position:absolute;top:0;bottom:0;box-sizing:border-box;background:var(--surface-2);display:flex;flex-direction:column;justify-content:center;gap:1px;padding:3px 5px;overflow:hidden;white-space:nowrap;border-radius:2px;min-width:0}
 .bks b{font:700 13px/1.15 var(--fd);color:var(--ink);overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.bks b.bi{border-left:3px solid var(--incline);padding-left:4px;margin-left:-2px}
 .bks i{font:600 11px var(--ft);font-style:normal;letter-spacing:.03em;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
 .c-plan{fill:none;stroke:var(--chart-ink);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
 .playhead{position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;background:var(--alert);left:0}
@@ -142,8 +143,8 @@ button.big{height:64px;padding:0 56px;font-size:24px}
 [data-theme="night"] .loadcol{border-right:1px solid var(--line);padding-right:20px}
 .recent{display:flex;flex-direction:column;gap:8px}
 .recent button{height:auto;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;text-transform:none;letter-spacing:0;background:transparent;text-align:left}
-.recent button b{font:700 19px var(--fd);letter-spacing:.03em;text-transform:uppercase}
-.recent button span{font:500 13px var(--ft);color:var(--muted);white-space:nowrap}
+.recent button b{font:700 19px var(--fd);letter-spacing:.03em;text-transform:uppercase;flex:1 1 0;min-width:0;overflow-wrap:anywhere;line-height:1.15}
+.recent button span{font:500 13px/1.35 var(--ft);color:var(--muted);white-space:pre-line;flex:none;max-width:33%;text-align:right;overflow-wrap:anywhere}
 .recent button.sel{border-color:var(--ink);box-shadow:inset 5px 0 0 var(--highlight)}
 [data-theme="volt"] .recent button.sel{box-shadow:inset 6px 0 0 var(--ink)}
 details.paste{margin-top:auto;display:flex;flex-direction:column;min-height:0}
@@ -182,6 +183,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 .banner{display:flex;align-items:center;gap:16px;min-height:72px;padding:10px 24px;border-radius:var(--r);background:var(--surface);color:var(--ink);
   font:700 clamp(24px,3.6vw,42px)/1.05 var(--fd);letter-spacing:.03em;text-transform:uppercase;font-style:var(--num-style);transition:background .15s}
 [data-theme="night"] .banner{background:transparent;border:1px solid var(--line)}
+.banner.pz{font-size:clamp(15px,2.2vw,26px);white-space:nowrap;letter-spacing:.02em}
 .banner.soon{background:var(--alert-tint);color:var(--alert-tint-ink);border-color:transparent}
 .banner.now{background:var(--alert);color:var(--alert-ink);border-color:transparent;animation:fl .5s steps(2) infinite}
 @keyframes fl{50%{opacity:.7}}
@@ -272,7 +274,7 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 #dchart{flex:1;min-height:0}
 pre.log{flex:1;min-height:70px;max-height:220px;overflow:auto;background:var(--bg);border:1px solid var(--line);padding:10px;border-radius:var(--r);font-size:11px;white-space:pre-wrap;word-break:break-all;margin:0;color:var(--muted)}
 .export{display:grid;grid-template-columns:1fr;gap:8px;margin-top:auto}
-#fbbtn2{height:96px}
+#fbbtn2{height:170px}
 #todaybtn{width:100%}
 #todaymsg,#upmsg{overflow-wrap:anywhere}
 #upmsg a{color:inherit;text-decoration:underline;margin-left:4px}
@@ -446,7 +448,6 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
     <div class="sum-body">
       <div class="card"><h2 class="lbl" id="dchartt">Planned vs actual</h2><div id="dchart"></div></div>
       <div class="card">
-        <h2 class="lbl">Export</h2>
         <pre id="logout" hidden></pre>
         <div class="muted" id="fbsum"></div>
         <div class="muted" id="upmsg"></div>
@@ -637,7 +638,7 @@ function renderFB(){
  $("fbundo").disabled=!FB.carbs.length;
  const s=fbSummary();$("fbsum").textContent=s?"Feedback: "+s:"";
  $("fbbtn2").classList.toggle("has",!!s);gateUp()}
-function gateUp(){const b=$("up"),ok=!!(FB.rpe&&FB.feel),done=/^(Uploaded|Already)/.test(b.textContent)||b.dataset.busy==="1";if(!done)b.disabled=!ok;$("fbgate").textContent=ok||done?"":"Select RPE and Feel to upload"}
+function gateUp(){const b=$("up"),ok=!!(FB.rpe&&FB.feel),done=/^(Uploaded|Already)/.test(b.textContent)||b.dataset.busy==="1";if(!done)b.disabled=!ok;$("fbgate").textContent=""}
 function fbChanged(){renderFB();refreshLog();if(LAST_LOG&&!S)persistRun(LAST_LOG,"finished")}
 for(let i=1;i<=10;i++){const b=document.createElement("button");b.textContent=i;b.dataset.v=i;b.onclick=()=>{FB.rpe=FB.rpe===i?null:i;fbChanged()};$("fbrpe").appendChild(b)}
 FEEL.forEach(([v,l])=>{const b=document.createElement("button");b.textContent=l;b.dataset.v=v;b.onclick=()=>{FB.feel=FB.feel===v?null:v;fbChanged()};$("fbfeel").appendChild(b)});
@@ -749,13 +750,13 @@ function hrchart(blocks,hr,tot,o={}){
   const tk=v=>Math.round(v*2)/2;
   yl=`<div class="yl l sp">`+[0,25,50,75].map(y=>`<span${y?"":' class="t"'} style="top:${y}%">${tk(smax-(smax-smin)*y/100)}</span>`).join("")+`<span class="u">km/h</span></div>`+
    `<div class="yl r in">`+[0,25,50,75].map(y=>`<span${y?"":' class="t"'} style="top:${y}%">${Math.round(imax-imax*y/100)}</span>`).join("")+`<span class="u">%</span></div>`;
-  capx=`<span style="color:var(--hrline)">HR</span> · <span style="color:var(--speed-text)">speed</span> · <span style="color:var(--incline-text)">incline</span>`}
+  capx=`<span style="color:var(--hrline)">HR</span> · <span style="color:var(--speed-text)">speed km/h</span> · <span style="color:var(--incline);font-weight:700">incline %</span>`}
  const st=niceStep(tot);let xl="";for(let t=0;t<=tot;t+=st)xl+=`<span style="left:${t/tot*100}%">${fmt(t)}</span>`;
  const zr=z=>z>1?(ZN[z-2]+1)+"–"+ZN[z-1]+" bpm":"≤"+ZN[0]+" bpm";
  const strip=blocks.map(b=>{const w=b.dur/tot,sv=b.speed!=null?(+b.speed).toFixed(1):null,iv=b.incline!=null?Math.round(+b.incline*10)/10:null,
-   v1=sv==null||w<.04?"":w>=.1?sv+" km/h":sv,v2=iv==null||w<.04?"":iv+" %",
+   v1=sv==null||w<.04?"":sv,v2=iv==null||w<.04?"":String(iv),
    sub=w>=.09?b.label+(ZN&&zoneOfLabel(b.label)?" · "+zr(zoneOfLabel(b.label)):""):"";
-  return `<span style="left:${(b.t0/tot*100).toFixed(3)}%;width:calc(${(b.dur/tot*100).toFixed(3)}% - 2px)" title="${b.label}${sv!=null?" · "+sv+" km/h"+(iv!=null?" · "+iv+" %":""):""}">${v1?`<b>${v1}</b>`:sub?`<i>${sub}</i>`:""}${v1&&v2?`<b>${v2}</b>`:""}</span>`}).join("");
+  return `<span style="left:${(b.t0/tot*100).toFixed(3)}%;width:calc(${(b.dur/tot*100).toFixed(3)}% - 2px)" title="${b.label}${sv!=null?" · "+sv+" km/h"+(iv!=null?" · "+iv+" %":""):""}">${v1?`<b class="bs">${v1}</b>`:sub?`<i>${sub}</i>`:""}${v1&&v2?`<b class="bi">${v2}</b>`:""}</span>`}).join("");
  const cap=blocks.length>=5?"HR · avg of last 60 s per block":"HR · avg per "+(tot<=3600?5:tot<=7200?10:15)+" min";
  return `<div class="chartbox${o.fill?" fill":""}" style="--ch:${o.h||150}px"><div class="pw">${yl}<div class="plot"><svg viewBox="0 0 1000 100" preserveAspectRatio="none">${grid}${rects}${under}${over}<path class="c-hr" d="${d}"/></svg>${mk}<div class="hrleg">${capx||cap}</div>${o.playhead?`<div class="playhead" style="left:${(now/tot*100).toFixed(2)}%"></div>`:""}</div></div><div class="bks">${strip}</div><div class="xl">${xl}</div></div>`}
 function runProfile(now){const P=[],ev=S.events||[];for(let k=0;k<ev.length;k++){const t0=ev[k].t,t1=Math.min(now,k+1<ev.length?ev[k+1].t:now);if(t1>t0)P.push({t0,t1,speed:ev[k].speed,incline:ev[k].incline})}
@@ -820,7 +821,7 @@ async function refreshRuns(){let srv=[],persist=true;
  list.forEach(r=>{const b=document.createElement("button"),n=document.createElement("b"),sp=document.createElement("span");
   n.textContent=r.name||"Run";
   const st=r.status==="uploaded"?"Uploaded":r.status==="recording"?"Interrupted":"Not uploaded";
-  sp.textContent=new Date(r.started_at).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+" · "+fmt(r.duration_s)+" · "+st;
+  const dd=new Date(r.started_at);sp.textContent=isNaN(dd)?"":String(dd.getDate()).padStart(2,"0")+"."+String(dd.getMonth()+1).padStart(2,"0")+"."+dd.getFullYear()+"\n";sp.textContent+=fmt(r.duration_s)+" · "+st;
   if(r.status!=="uploaded")b.style.borderColor="var(--highlight)";
   b.append(n,sp);b.onclick=()=>openRun(r.id,r.status);box.appendChild(b)})}
 async function openRun(id,status){if(S)return;let log=(locRead().find(r=>r.id===id)||{}).log;
@@ -924,7 +925,7 @@ document.querySelectorAll("[data-a]").forEach(btn=>{
  btn.oncontextmenu=e=>e.preventDefault();
  btn.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();step(sg*d)}}});
 $("pause").onclick=()=>{if(!S)return;if(S.paused){S.pausedMs+=Date.now()-S.pauseAt;S.paused=false;BLE.send(S.speed,S.incline);$("stop").disabled=true;$("stop").className="ghost";$("pause").textContent="Pause";$("banner").className="banner";$("banner").textContent="resumed"}
- else{S.paused=true;S.pauseAt=Date.now();$("stop").disabled=false;$("stop").className="";$("pause").textContent="Resume";$("banner").className="banner soon";$("banner").textContent="PAUSED — timer stopped, belt keeps running"}};
+ else{S.paused=true;S.pauseAt=Date.now();$("stop").disabled=false;$("stop").className="";$("pause").textContent="Resume";$("banner").className="banner soon pz";$("banner").textContent="PAUSED — timer stopped, belt keeps running"}};
 $("stop").onclick=()=>S&&finish(true);
 function mkLog(e){const o=fbOut(),l={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,blocks:S.free?[{label:"Free run",t0:0,dur:Math.max(1,Math.round(e))}]:B.map(b=>({label:b.label,t0:b.t0,dur:b.dur})),conn:CONN.filter(c=>c.at>=S.started),machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc},workout:W};if(Object.keys(o).length)l.feedback=o;return l}
 function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);clearInterval(hrt);BLE.clr("hrgap");BLE.stop();try{wl&&wl.release()}catch(x){}
