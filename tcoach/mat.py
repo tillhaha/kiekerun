@@ -40,7 +40,6 @@ ME_EX = [
     ("Goblet squat", 3.0, False, "Weight at the chest, upright torso, controlled", 4),
     ("2-hand kettlebell swing", 2.0, False, "Hinge from the hips, not a squat", 4),
 ]
-WARMUP_S = (10 * 60, 15 * 60)
 COOLDOWN_S = 10 * 60
 
 CORE_WARM = [("Cat-cow", ""), ("Glute bridge", ""), ("Dead bug, slow", ""), ("Bird dog, slow, alternating", "")]
@@ -65,25 +64,19 @@ def _step(t: str, label: str, dur: float | None, **kw) -> dict:
     return s
 
 
-def me_workout(wo: int, sets: int | None = None, warmup_min: int = 12) -> dict:
+def me_workout(wo: int, sets: int | None = None) -> dict:
     if not isinstance(wo, int) or isinstance(wo, bool) or wo not in ME_WO:
         raise ValueError("wo must be a whole number 1-14")
     d_sets, load, rs, ri, re_, note = ME_WO[wo]
     sets = d_sets if sets is None else sets
     if not isinstance(sets, int) or isinstance(sets, bool) or not 4 <= sets <= 8:
         raise ValueError("sets must be a whole number 4-8")
-    if not isinstance(warmup_min, int) or not 10 <= warmup_min <= 15:
-        raise ValueError("warmup_min must be 10-15")
-    steps = [
-        _step("warm", "Easy aerobic warm-up", warmup_min * 60, cue="Build to Z3 in the last 2 minutes", z3=120),
-        _step("manual", "10 get-ups", None, cue="From lying on the floor; tap done after the 10th"),
-        _step("manual", "10 burpees", None, cue="Tap done after the 10th"),
-    ]
+    steps = []   # the warm-up is done by hand, not part of the session
     ex = [e for e in ME_EX if wo >= e[4]]
     for ei, (name, tempo, uni, cue, _) in enumerate(ex):
         for s in range(1, sets + 1):
             if s == 1:
-                steps.append(_step("rest", f"Next: {name}", re_ if ei else 5, cue=cue))
+                steps.append(_step("rest", f"Next: {name}", re_ if ei else 10, cue=cue))
             else:
                 steps.append(_step("rest", f"Rest · {name} set {s}/{sets}", rs))
             for si, side in enumerate(("right", "left") if uni else (None,)):
@@ -91,7 +84,7 @@ def me_workout(wo: int, sets: int | None = None, warmup_min: int = 12) -> dict:
                     steps.append(_step("rest", f"Switch side · {name}", ri))
                 steps.append(_step("work", f"{name}" + (f" · {side.upper()}" if side else ""), ME_REPS * tempo,
                                    cue=cue, reps=ME_REPS, tempo=tempo, set=f"{s}/{sets}", load=load))
-    steps.append(_step("warm", "Easy aerobic cool-down", COOLDOWN_S, cue="Bring the heart rate down"))
+    steps.append(_step("cool", "Easy cool-down", COOLDOWN_S, cue="Bring the heart rate down"))
     return {"kind": "me", "name": f"ME WO {wo}", "wo": wo, "sets": sets, "load": load, "note": note,
             "steps": steps, "duration_s": sum(s["dur"] or 90 for s in steps)}
 
@@ -114,7 +107,7 @@ def core15_workout(rounds: int = 3, hard: bool = False) -> dict:
 
 def build(kind: str, **kw) -> dict:
     if kind == "me":
-        return me_workout(kw.get("wo"), kw.get("sets"), kw.get("warmup_min") or 12)
+        return me_workout(kw.get("wo"), kw.get("sets"))
     if kind == "core15":
         return core15_workout(kw.get("rounds") or 3, bool(kw.get("hard")))
     raise ValueError("kind must be me or core15")

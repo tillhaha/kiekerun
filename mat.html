@@ -13,7 +13,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%}
 body{background:var(--bg);color:var(--ink);font:500 16px/1.4 var(--ft);padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
-.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.wrap{width:100%;display:flex;flex-direction:column;gap:12px}
 .top{display:flex;justify-content:space-between;align-items:center}
 .top b{font:700 24px var(--fd);letter-spacing:.04em;font-style:italic}.top a{color:var(--muted);font-size:14px}
 h2{font:600 13px var(--fd);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
@@ -27,7 +27,7 @@ button.pri{background:var(--ink);color:var(--hl);border-color:var(--ink)}
 button.big{min-height:72px;font-size:24px;flex:1}
 button.sel{background:var(--ink);color:var(--hl)}button.ghost{background:transparent}button.dng{color:var(--alert-tint-ink)}
 button:disabled{opacity:.4}
-.row{display:flex;gap:10px;flex-wrap:wrap}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row.fill>*{flex:1 1 0;min-width:0}.row.fill>button{padding:0 8px}
 .seg{display:flex;gap:6px;flex-wrap:wrap}.seg button{flex:1;min-width:48px;padding:0 8px}
 .mut{color:var(--muted)}.small{font-size:14px}
 .item{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 14px;text-transform:none;letter-spacing:0;font:700 19px var(--fd)}
@@ -63,15 +63,15 @@ body.rest .time{color:var(--ok)}
    <div id="optme" class="grid">
     <label>WO (1–14)<select id="wo"></select></label>
     <label>Sets<select id="sets"></select></label>
-    <label>Warm-up (min)<select id="wu"></select></label>
-   </div>
+       </div>
    <div id="optcore" class="grid hide">
     <label>Rounds<select id="rounds"><option>2</option><option selected>3</option><option>4</option></select></label>
     <label>Intensity<select id="hard"><option value="0">40 s work / 10 s change</option><option value="1">45 s work / 5 s change</option></select></label>
    </div>
    <div id="info" class="mut small" style="margin-top:10px"></div>
   </div>
-  <div class="card row" style="gap:16px"><label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="snd" checked style="width:auto;min-height:0"> Sound &amp; vibration</label></div>
+  <div class="card"><h2>Sound</h2><div class="row fill" style="align-items:flex-end"><label>Tones<select id="snd"><option value="beep">Beep</option><option value="chime">Chime</option><option value="wood">Wood block</option><option value="arcade">Arcade</option><option value="voice">Voice countdown</option><option value="off">Off</option></select></label><button id="sndtest">Test</button></div>
+<label style="flex-direction:row;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" id="vib" checked style="width:auto;min-height:0"> Vibration</label></div>
   <button class="pri big" id="go">Start</button>
  </div>
 
@@ -89,8 +89,8 @@ body.rest .time{color:var(--ok)}
    <div class="bar"><i id="pb"></i></div>
   </div>
   <div class="card next" id="nx">–</div>
-  <div class="row"><button class="big" id="pause">Pause</button><button class="big pri" id="skip">Next ›</button></div>
-  <div class="row"><button id="back">‹ Back</button><button id="add">+10 s</button><button class="dng" id="quit">Quit</button></div>
+  <div class="row fill"><button class="big" id="pause">Pause</button><button class="big pri" id="skip">Next ›</button></div>
+  <div class="row fill"><button id="back">‹ Back</button><button id="add">+10 s</button><button class="dng" id="quit">Quit</button></div>
   <div class="card"><h2>Plan (<span id="tot">–</span>)</h2><div id="list"></div></div>
  </div>
 
@@ -117,21 +117,34 @@ async function API(path,opt){let r;try{r=await fetch(path,opt)}catch(e){throw Er
  if(!r.ok)throw Error((j&&j.detail)||"HTTP "+r.status);return j}
 const fmt=s=>{s=Math.max(0,Math.ceil(s-1e-6));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")};
 let AC=null;
-function beep(f,d,v){if(!$("snd").checked)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;g.gain.value=v||.15;o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+d)}catch(e){}}
-function buzz(p){if($("snd").checked)try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}}
+function tone(f,d,v,type,delay){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const t=AC.currentTime+(delay||0),o=AC.createOscillator(),g=AC.createGain();o.type=type||"sine";o.frequency.value=f;
+ g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+.02)}catch(e){}}
+function say(t){try{const u=new SpeechSynthesisUtterance(t);u.lang="en-US";u.rate=1.05;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
+// kinds: rep (every repetition), count (last 3 s of a rest, n = 3/2/1), go (a set starts / rest ends), end (session done)
+const SND={
+ beep:{rep:()=>tone(660,.06,.08),count:()=>tone(520,.1,.14),go:()=>tone(880,.25,.18),end:()=>{tone(880,.2,.18);tone(1100,.3,.18,"sine",.25)}},
+ chime:{rep:()=>tone(988,.14,.06),count:()=>tone(784,.35,.16),go:()=>{tone(1047,.7,.18);tone(1319,.7,.12,"sine",.08)},end:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.6,.16,"sine",i*.16))},
+ wood:{rep:()=>tone(1500,.03,.1,"triangle"),count:()=>tone(900,.05,.25,"triangle"),go:()=>{tone(1200,.06,.3,"triangle");tone(1200,.06,.3,"triangle",.12)},end:()=>[0,.12,.24].forEach(d=>tone(1000,.08,.3,"triangle",d))},
+ arcade:{rep:()=>tone(990,.04,.05,"square"),count:()=>tone(440,.1,.07,"square"),go:()=>{tone(660,.08,.08,"square");tone(990,.18,.08,"square",.09)},end:()=>[523,659,784,1047,1319].forEach((f,i)=>tone(f,.1,.08,"square",i*.09))},
+ voice:{rep:()=>tone(1400,.025,.05,"triangle"),count:n=>say(String(n)),go:()=>say("Go"),end:()=>say("Done. Well done.")}};
+function snd(kind,n){const k=$("snd").value;if(k==="off")return;const p=SND[k]||SND.beep;try{p[kind]&&p[kind](n)}catch(e){}}
+function buzz(p){if($("vib").checked)try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}}
+try{const v=localStorage.getItem("mat_snd");if(v&&[...$("snd").options].some(o=>o.value===v))$("snd").value=v;if(localStorage.getItem("mat_vib")==="0")$("vib").checked=false}catch(e){}
+$("snd").onchange=()=>{try{localStorage.setItem("mat_snd",$("snd").value)}catch(e){}$("sndtest").click()};
+$("vib").onchange=()=>{try{localStorage.setItem("mat_vib",$("vib").checked?"1":"0")}catch(e){}};
+$("sndtest").onclick=()=>{snd("count",3);setTimeout(()=>snd("count",2),700);setTimeout(()=>snd("go"),1400)};
 
 /* ---------- choose ---------- */
 let KIND="me",WK=null,PAIRED=null,PROG=null;
 for(let i=1;i<=14;i++)$("wo").add(new Option("WO "+i,i));
 for(let i=4;i<=8;i++)$("sets").add(new Option(i+" sets",i));
-for(let i=10;i<=15;i++)$("wu").add(new Option(i+" min",i));$("wu").value=12;
 const kindBtn=(k,pv=true)=>{KIND=k;$("kme").className=k==="me"?"sel":"";$("kcore").className=k==="core15"?"sel":"";$("optme").classList.toggle("hide",k!=="me");$("optcore").classList.toggle("hide",k!=="core15");PAIRED=null;if(pv)preview()};
 $("kme").onclick=()=>kindBtn("me");$("kcore").onclick=()=>kindBtn("core15");
-function qs(){return KIND==="me"?`kind=me&wo=${$("wo").value}&sets=${$("sets").value}&warmup_min=${$("wu").value}`:`kind=core15&rounds=${$("rounds").value}&hard=${$("hard").value}`}
+function qs(){return KIND==="me"?`kind=me&wo=${$("wo").value}&sets=${$("sets").value}`:`kind=core15&rounds=${$("rounds").value}&hard=${$("hard").value}`}
 async function preview(){try{WK=await API("/api/mat/workout?"+qs());$("go").disabled=false;
   $("info").textContent=(KIND==="me"?WK.load+" · pauses "+"from the progression · ":"")+"≈ "+Math.round(WK.duration_s/60)+" min"+(WK.note?" · "+WK.note:"")}
  catch(e){WK=null;$("go").disabled=true;$("info").textContent=e.message}}
-["wo","sets","wu","rounds","hard"].forEach(k=>$(k).onchange=()=>{PAIRED=null;if(k==="wo")$("sets").value=DEFSETS[$("wo").value]||$("sets").value;preview()});
+["wo","sets","rounds","hard"].forEach(k=>$(k).onchange=()=>{PAIRED=null;if(k==="wo")$("sets").value=DEFSETS[$("wo").value]||$("sets").value;preview()});
 const DEFSETS={1:4,2:4,3:6,4:5,5:6,6:6,7:6,8:8,9:6,10:8,11:8,12:8,13:8,14:8};
 function pickPlanned(it){PAIRED=it.event_id||null;const m=it.mat;kindBtn(m.kind,false);PAIRED=it.event_id||null;
  if(m.kind==="me"){$("wo").value=m.wo;$("sets").value=m.sets}else{$("rounds").value=m.rounds;$("hard").value=m.hard?1:0}
@@ -155,7 +168,7 @@ function listRender(){$("list").innerHTML=steps.map((s,i)=>`<div id="l${i}" clas
 function stepDur(s){return s.dur==null?null:s.dur+(s.extra||0)}
 function show(i){
  cur=i;const s=steps[i];if(!s){finish();return}
- $("ph").textContent=s.t==="work"?"Set "+(s.set||""):s.t==="rest"?"Rest":s.t==="manual"?"Warm-up":"Aerobic";
+ $("ph").textContent=s.t==="work"?"Set "+(s.set||""):s.t==="rest"?"Rest":s.t==="warm"?"Warm-up":"";
  $("ph").className="phase "+(s.t==="work"?"work":s.t==="rest"?"rest":"");document.body.classList.toggle("rest",s.t==="rest");
  $("ti").textContent=s.label;$("su").textContent=s.cue||"";$("pos").textContent=(i+1)+" / "+steps.length;
  const im=$("img");im.classList.add("hide");
@@ -165,16 +178,16 @@ function show(i){
  s.extra=s.extra||0;t0=performance.now();acc=0;
  $("skip").textContent=s.t==="manual"?"Done ✓":"Next ›";
  if(s.t==="manual")$("tm").textContent="✓";
- buzz(60);if(s.t==="work")beep(880,.25);listRender();tick()}
+ buzz(60);if(s.t==="work")snd("go");else if(s.t==="rest"&&$("snd").value==="voice"&&/^(Next|Switch)/.test(s.label))say(s.label.replace(/^Next: /,"Next, ").replace(/ · /," "));listRender();tick()}
 const elapsedStep=()=>paused?acc:acc+(performance.now()-t0)*X/1000;
 function tick(){
  const s=steps[cur];if(!s||s.dur==null){$("pb").style.width="100%";return}
  const e=elapsedStep(),D=stepDur(s),rem=D-e;$("tm").textContent=fmt(rem);$("pb").style.width=Math.min(100,e/D*100)+"%";
  if(s.t==="work"&&s.reps){const k=Math.min(s.reps,Math.floor(e/s.tempo)+1);$("rp").textContent="Rep "+k+" / "+s.reps;
-  [...$("dots").children].forEach((d,i)=>d.classList.toggle("on",i<k));const key="r"+k;if(!played.has(key)&&e>.02){played.add(key);beep(660,.05,.07)}}
+  [...$("dots").children].forEach((d,i)=>d.classList.toggle("on",i<k));const key="r"+k;if(!played.has(key)&&e>.02){played.add(key);snd("rep")}}
  if(s.z3&&rem<=s.z3){$("cue").textContent="Now build up to Z3";$("cue").className="cue z3"}
- else if(rem<=3&&rem>0&&cur+1<steps.length&&s.t!=="warm"){const key="c"+Math.ceil(rem);if(!played.has(key)){played.add(key);beep(520,.1,.12)}}
- if(e>=D){if(s.t==="rest")beep(880,.25);next()}}
+ else if(rem<=3&&rem>0&&cur+1<steps.length&&s.t==="rest"){const n=Math.ceil(rem),key="c"+n;if(!played.has(key)){played.add(key);snd("count",n)}}
+ if(e>=D){next()}}
 const next=()=>{cur+1>=steps.length?finish():show(cur+1)};
 $("skip").onclick=next;$("back").onclick=()=>{if(cur>0)show(cur-1)};
 $("add").onclick=()=>{const s=steps[cur];if(s&&s.dur!=null){s.extra=(s.extra||0)+10;tick()}};
@@ -184,7 +197,7 @@ $("quit").onclick=()=>{const q=$("quit");if(!q.dataset.arm){q.dataset.arm="1";q.
 function stop(){clearInterval(timer);timer=null;lock(false);document.body.classList.remove("rest")}
 $("go").onclick=()=>{if(!WK)return;steps=WK.steps;if(!steps.length)return;
  $("pick").classList.add("hide");$("done").classList.add("hide");$("run").classList.remove("hide");
- $("tot").textContent="≈ "+Math.round(WK.duration_s/60)+" min";paused=false;pausedMs=0;startedAt=new Date();beep(440,.04,.01);lock(true);
+ $("tot").textContent="≈ "+Math.round(WK.duration_s/60)+" min";paused=false;pausedMs=0;startedAt=new Date();lock(true);
  clearInterval(timer);timer=setInterval(()=>{if(!paused)tick()},100);show(0)};
 
 /* ---------- done + upload ---------- */
@@ -200,7 +213,7 @@ function finish(){stop();DURATION=Math.round((Date.now()-startedAt-pausedMs)/100
  $("run").classList.add("hide");$("done").classList.remove("hide");
  $("dt").textContent=WK.name+" finished";$("ds").textContent=Math.round(DURATION/60)+" min";
  FB={rpe:null,feel:null};$("note").value="";$("upok").classList.add("hide");$("upmsg").textContent="";$("up").dataset.done="";$("up").textContent="Upload to intervals.icu";gate();
- beep(880,.2);setTimeout(()=>beep(1100,.3),250);buzz([200,100,200]);window.scrollTo(0,0)}
+ snd("end");buzz([200,100,200]);window.scrollTo(0,0)}
 $("up").onclick=async()=>{if(!(FB.rpe&&FB.feel)||$("up").dataset.done)return;const b=$("up");b.disabled=true;$("upmsg").textContent="Uploading…";
  const body={kind:WK.kind,started_at:startedAt.toISOString(),duration_s:Math.max(60,DURATION),feedback:{rpe:FB.rpe,feel:FB.feel,note:$("note").value.trim()},paired_event_id:PAIRED};
  if(WK.kind==="me"){body.wo=WK.wo;body.sets=WK.sets}else{body.rounds=WK.rounds;body.hard=!!WK.hard}

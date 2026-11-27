@@ -18,7 +18,9 @@ def test_me_wo1_has_four_exercises_and_doubled_times():
     assert names == {"Split jump squat", "Squat jump", "Box step-up", "Front lunge"}
     assert len(work(w)) == 4 * 4 + 2 * 4          # 4 sets; step-up and lunge have right + left
     assert work(w)[0]["dur"] == 20 and work(w)[0]["reps"] == 10   # book: 10 s, doubled
-    assert [s["dur"] for s in w["steps"] if s["t"] == "warm"] == [720, 600]
+    assert w["steps"][0]["t"] == "rest" and w["steps"][0]["dur"] == 10     # no warm-up: starts with the get-ready rest
+    assert [s["t"] for s in w["steps"] if s["t"] in ("warm", "manual")] == []
+    assert w["steps"][-1]["t"] == "cool" and w["steps"][-1]["dur"] == 600
 
 
 def test_me_wo4_adds_goblet_and_swing_and_progression_rests():

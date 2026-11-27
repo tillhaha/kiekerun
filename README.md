@@ -177,7 +177,7 @@ gives the Ten Percent Test: (LT - AeT) / LT.
 
 `/mat` (button "Mat workouts" on the Plan screen) runs strength sessions without the treadmill, on iPhone or MacBook.
 Everything runs on timers (big countdown, rep counter, sound, vibration, wake lock); pause, +10 s, back and skip are always available.
-Warm-up get-ups and burpees are the only steps you confirm with "Done".
+ME has no warm-up step (done by hand); Core 15 starts with its own 2 min warm-up.
 
 * **ME** (Muscular Endurance, WO 1-14): exercises, load, rests and sets follow the progression table in `tcoach/mat.py`
   (from the training principles doc). Time per set of 10 is doubled compared with the book (20 s; goblet squat 30 s).

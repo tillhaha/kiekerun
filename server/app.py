@@ -317,9 +317,9 @@ def mat_page(request: Request, c: HTTPBasicCredentials | None = Depends(basic)):
 # ---------------------------------------------------------------- mat workouts (ME, Core 15)
 @app.get("/api/mat/workout", dependencies=[Depends(require_login)])
 def mat_workout(kind: str, wo: int | None = None, sets: int | None = None, rounds: int | None = None,
-                hard: int = 0, warmup_min: int | None = None):
+                hard: int = 0):
     try:
-        return matmod.build(kind, wo=wo, sets=sets, rounds=rounds, hard=bool(hard), warmup_min=warmup_min)
+        return matmod.build(kind, wo=wo, sets=sets, rounds=rounds, hard=bool(hard))
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
