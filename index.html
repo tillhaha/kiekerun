@@ -190,7 +190,8 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 @media (prefers-reduced-motion:reduce){.banner.now{animation:none}}
 .nextcard{background:var(--surface);border-radius:var(--r);padding:10px 18px;display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
 [data-theme="night"] .nextcard{background:transparent;border:1px solid var(--line)}
-.fuelcard{cursor:default;user-select:none}
+.fuelcard{cursor:default;user-select:none;overflow:hidden;min-height:0}
+.fuelcard .lbl,.fuelcard .nv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .fuelcard b{font-size:clamp(22px,4vh,36px)}
 .fuelcard.idle{opacity:.55;cursor:default}
 .fuelcard.live{cursor:pointer;box-shadow:inset 5px 0 0 var(--highlight)}
@@ -501,6 +502,8 @@ function fuelOf(w,tot){const out=[],add=(t,f)=>{if(t<0||t>tot)return;const k=FLA
  return out.sort((a,b)=>a.at-b.at)}
 const flaskTxt=f=>f.k?fnum(f.fl)+" "+f.k[0].toUpperCase()+f.k.slice(1)+"-Flask":"";
 const fuelTxt=f=>f.k?[flaskTxt(f),f.n].filter(Boolean).join(" · "):[f.n,f.c?f.c+" g":"",f.f?f.f+" ml":""].filter(Boolean).join(" · ");
+const fuelMain=f=>f.k?flaskTxt(f):(f.n||"Fuel");
+const fuelInfo=f=>[f.c?f.c+" g":"",f.f?f.f+" ml":"",f.k?f.n:""].filter(Boolean).join(" · ");
 const fuelSub=f=>f.k?[f.c?f.c+" g":"",f.f?f.f+" ml":""].filter(Boolean).join(" · "):"";
 const rise=(km,inc)=>km*1000*Math.sin(Math.atan(inc/100));
 // workout targets: optional target_distance_km / target_elevation_m in the JSON, else derived from the blocks
@@ -906,13 +909,13 @@ function loop(force){if(!S||(S.paused&&!force)||S.hold)return;const e=elapsed();
 function fuelTick(e){const F=S&&S.fz;if(!F||!F.length)return;
  for(let k=0;k<F.length-1;k++)if(F[k].st===0&&F[k+1].at<=e)F[k].st=2;
  const k=F.findIndex(f=>f.st===0),card=$("fuelcard"),miss=F.filter(f=>f.st===2).length,got=F.filter(f=>f.st===1).reduce((a,f)=>a+f.c,0);
- $("fxt").textContent="Next fuel"+(miss?" · "+miss+" missed":"");
- if(k<0){card.className="nextcard fuelcard";$("fxt").textContent="Fuel"+(miss?" · "+miss+" missed":"");$("fxl").textContent="done";$("fxv").textContent=got+" g carbs logged";return}
+ const ms=miss?" · "+miss+" missed":"";
+ if(k<0){card.className="nextcard fuelcard";$("fxt").textContent="Fuel · done"+ms;$("fxl").textContent=got+" g";$("fxv").textContent="carbs logged";return}
  const f=F[k],d=f.at-e;
- $("fxl").textContent=fuelTxt(f)||"Fuel";
- if(d>0){card.className="nextcard fuelcard"+(d<=30?" live":"");$("fxv").textContent="in "+fmt(d)+" · "+(fuelSub(f)||"at "+fmt(f.at));
+ $("fxl").textContent=fuelMain(f);
+ if(d>0){card.className="nextcard fuelcard"+(d<=30?" live":"");$("fxt").textContent="Fuel in "+fmt(d)+ms;$("fxv").textContent=fuelInfo(f)||"at "+fmt(f.at);
   if(d<=30&&S.fp!==k){S.fp=k;beep(1,1400,.1);vib(100)}}
- else{card.className="nextcard fuelcard due";$("fxt").textContent="Fuel now · tap when taken"+(miss?" · "+miss+" missed":"");$("fxv").textContent="due "+fmt(-d)+" ago"+(fuelSub(f)?" · "+fuelSub(f):"");
+ else{card.className="nextcard fuelcard due";$("fxt").textContent="Fuel NOW · tap"+ms;$("fxv").textContent="+"+fmt(-d)+(fuelInfo(f)?" · "+fuelInfo(f):"");
   if(S.fa!==k){S.fa=k;S.fl=e;beep(3,1568,.12);vib([200,100,200,100,200]);say("Fuel now. "+(f.k?flaskTxt(f).replace("-"," ")+". ":"")+(f.n?f.n+". ":"")+(f.c?f.c+" grams carbs":""))}
   else if(e-S.fl>=60){S.fl=e;beep(2,1568,.12);vib([200,100,200])}}}
 $("fuelcard").onclick=()=>{if(!S||S.paused||S.hold||!S.fz)return;const e=elapsed(),k=S.fz.findIndex(f=>f.st===0);if(k<0)return;const f=S.fz[k];if(f.at-e>30)return;
