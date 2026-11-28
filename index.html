@@ -253,7 +253,10 @@ textarea:focus{outline:2px solid var(--highlight);outline-offset:-1px}
 [data-theme="night"] .chartpanel{padding:12px 0 0}
 #tl{flex:1;min-height:0}
 .controls{display:grid;grid-template-rows:auto 2.2fr 1fr;gap:10px;min-height:0}
+.controls{grid-auto-rows:auto}
 .controls button{height:auto;min-height:44px}
+#seek{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}#seek[hidden]{display:none}#seek button{font-size:14px;min-height:44px}
+.chartpanel.seekable #tl{cursor:crosshair}
 .controls #pause{font-size:24px;min-height:72px}
 #stop:not(:disabled){background:var(--alert);color:var(--alert-ink);border-color:transparent}
 .mach{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;justify-content:space-between}
@@ -434,6 +437,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--highlight)}
         <div class="mach"><b>Treadmill</b><span id="mach">not connected</span></div>
         <button class="pri" id="pause">Pause</button>
         <button class="ghost" id="stop" disabled title="Pause first, then finish">Finish</button>
+        <div id="seek" hidden><button class="ghost" data-sk="60">+1 min</button><button class="ghost" data-sk="300">+5 min</button><button class="ghost" data-sk="blk">Next block</button></div>
       </div>
     </div>
     <div class="bar overall"><i id="prog"></i></div>
@@ -866,14 +870,14 @@ function startRun(){if(!(W&&W.free)){try{localStorage.setItem("tc_json",$("json"
  $("lrem").textContent=S.free?"Avg speed":"Remaining";$("urem").textContent=S.free?"km/h":"workout";
  if(FUEL.length)fuelTick(0);else{$("fuelcard").className="nextcard fuelcard idle";$("fxt").textContent="Fuel";$("fxl").textContent="no plan";$("fxv").textContent=""}
  loadZones().then(ok=>ok&&renderRunChart());
- show("run");$("pause").textContent="Pause";$("stop").disabled=true;$("stop").className="ghost";
+ show("run");$("seek").hidden=true;$("pause").textContent="Pause";$("stop").disabled=true;$("stop").className="ghost";
  renderRunChart();
  BLE.live={};
  if(BLE.on()){S.hold=true;$("banner").className="banner soon";$("banner").textContent="Starting treadmill…";
   BLE.begin(B[0].speed,B[0].incline).then(()=>{
    if(S){S.t0=Date.now();S.pausedMs=0;S.skip=0;S.hold=false;S.events=[];S.hr=[];S.idx=-1;S.alerted=-1;S.fz.forEach(f=>f.st=0);S.fa=S.fp=-1;beep(1,660)}})}
  beep(1,660);tick=setInterval(loop,200);clearInterval(hrt);hrt=setInterval(hrLoop,1000);hrLoop();loop()}
-function loop(){if(!S||S.paused||S.hold)return;const e=elapsed();if(S.free)S.end=Math.max(1800,Math.ceil((e+300)/300)*300);else if(e>=S.end){finish(false);return}
+function loop(force){if(!S||(S.paused&&!force)||S.hold)return;const e=elapsed();if(S.free)S.end=Math.max(1800,Math.ceil((e+300)/300)*300);else if(e>=S.end){finish(false);return}
  const i=curIdx(e),b=B[i],nb=B[i+1],rem=b.t0+b.dur-e;
  if(i!==S.idx){S.idx=i;setBlockVals(i);logEv();S.resent=false;S.mis=0;if(i>0)BLE.send(S.speed,S.incline);if(i>0){beep(3,1175);vib([300,100,300]);say(`Now ${b.speed} kilometres per hour, incline ${b.incline} percent`);S.nowUntil=Date.now()+6000}}
  const bn=$("banner");
@@ -931,8 +935,17 @@ document.querySelectorAll("[data-a]").forEach(btn=>{
  ["pointerup","pointerleave","pointercancel"].forEach(ev=>btn.addEventListener(ev,stop));
  btn.oncontextmenu=e=>e.preventDefault();
  btn.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();step(sg*d)}}});
-$("pause").onclick=()=>{if(!S)return;if(S.paused){S.pausedMs+=Date.now()-S.pauseAt;S.paused=false;BLE.send(S.speed,S.incline);$("stop").disabled=true;$("stop").className="ghost";$("pause").textContent="Pause";$("banner").className="banner";$("banner").textContent="resumed"}
- else{S.paused=true;S.pauseAt=Date.now();$("stop").disabled=false;$("stop").className="";$("pause").textContent="Resume";$("banner").className="banner soon pz";$("banner").textContent="PAUSED — timer stopped, belt keeps running"}};
+// ---- fast-forward (while paused): jump to a later point; the skipped stretch counts no distance
+function seekTo(T){if(!S||!S.paused||S.free)return;const e=elapsed();T=Math.min(S.end-1,T);if(!(T>e+1))return;
+ S.events.push({t:Math.round(e*10)/10,speed:0,incline:S.incline});S.skip+=T-e;
+ const i=curIdx(T);S.idx=i;S.alerted=i;setBlockVals(i);logEv();clog("run","skipped ahead to "+fmt(T));
+ loop(true);renderRunChart();$("banner").className="banner soon pz";$("banner").textContent="SKIPPED to "+fmt(T)+" — press Resume"}
+document.querySelectorAll("#seek [data-sk]").forEach(b=>b.onclick=()=>{if(!S||!S.paused)return;const e=elapsed(),k=b.dataset.sk;
+ if(k==="blk"){const i=curIdx(e);if(B[i+1])seekTo(B[i+1].t0+.05)}else seekTo(e+ +k)});
+$("tl").onclick=ev=>{if(!S||!S.paused||S.free)return;const pl=$("tl").querySelector(".plot");if(!pl)return;const r=pl.getBoundingClientRect();
+ seekTo(Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width))*S.end)};
+$("pause").onclick=()=>{if(!S)return;if(S.paused){S.pausedMs+=Date.now()-S.pauseAt;S.paused=false;BLE.send(S.speed,S.incline);$("stop").disabled=true;$("stop").className="ghost";$("pause").textContent="Pause";$("seek").hidden=true;$("tl").parentNode.classList.remove("seekable");$("banner").className="banner";$("banner").textContent="resumed"}
+ else{S.paused=true;S.pauseAt=Date.now();$("stop").disabled=false;$("stop").className="";$("pause").textContent="Resume";$("seek").hidden=!!S.free;$("tl").parentNode.classList.toggle("seekable",!S.free);$("banner").className="banner soon pz";$("banner").textContent="PAUSED — timer stopped, belt keeps running"}};
 $("stop").onclick=()=>S&&finish(true);
 function mkLog(e){const o=fbOut(),l={version:1,name:W.name||"Treadmill workout",started_at:S.started,duration_s:Math.round(e),events:S.events,hr:S.hr,blocks:S.free?[{label:"Free run",t0:0,dur:Math.max(1,Math.round(e))}]:B.map(b=>({label:b.label,t0:b.t0,dur:b.dur})),conn:CONN.filter(c=>c.at>=S.started),machine:{distance_m:BLE.live.dist,ascent_m:BLE.live.asc,descent_m:BLE.live.desc},workout:W};if(Object.keys(o).length)l.feedback=o;return l}
 function finish(early){const e=Math.min(elapsed(),S.end);clearInterval(tick);clearInterval(hrt);BLE.clr("hrgap");BLE.stop();try{wl&&wl.release()}catch(x){}

@@ -191,3 +191,6 @@ ME has no warm-up step (done by hand); Core 15 starts with its own 2 min warm-up
   (`POST /api/mat/upload`) with the marker, so the progression continues from what you actually did.
 * **Exercise graphics (optional):** put `<exercise-key>.png|jpg|webp|svg|gif` into `$KIEKERUN_IMG_DIR` (default `/data/img`),
   e.g. `dead-bug.png`, `box-step-up.png`, `side-plank-right.png`. Missing images are simply not shown.
+
+### Skipping ahead in a workout
+Pause, then tap the chart to jump to that point, or use **+1 min / +5 min / Next block**. Only forward; the skipped stretch counts no distance or ascent. Press Resume: the belt gets the speed and incline of the block you landed in.
