@@ -545,7 +545,8 @@ const BLE={dev:null,cp:null,tries:0,userDc:false,last:{},live:{},q:Promise.resol
    this.dev=await navigator.bluetooth.requestDevice({filters:[{services:[U(0x1826)]}]});
    this.dev.addEventListener("gattserverdisconnected",()=>this.lost());
    this.userDc=false;this.tries=0;await this.hook();
-   this.st("Connected to "+(this.dev.name||"treadmill")+". Control is requested when you press Start.");
+   if(window.S&&S){this.st("Treadmill reconnected.");await this.regain();setTimeout(()=>this.clr(""),4000)}
+   else this.st("Connected to "+(this.dev.name||"treadmill")+". Control is requested when you press Start.");
   }catch(e){this.cp=null;e.name==="NotFoundError"?this.st(""):this.st("Bluetooth: "+(e.message||e.name||e),true)}},
  async hook(){
   const srv=await this.dev.gatt.connect(),svc=await srv.getPrimaryService(U(0x1826));
@@ -559,14 +560,19 @@ const BLE={dev:null,cp:null,tries:0,userDc:false,last:{},live:{},q:Promise.resol
   if(run&&!this.userDc&&this.tries<5){this.tries++;this.st("Treadmill lost, reconnecting ("+this.tries+"/5)… the belt keeps its last command.",true);
    setTimeout(async()=>{if(this.cp||!(window.S&&S)||this.userDc)return;
     try{await this.hook();clog("treadmill","reconnected (attempt "+this.tries+")");this.tries=0;this.st("Treadmill reconnected.");
-     await this.cmd([0]);if(window.S&&S&&this.on())await this.set(S.speed,S.incline);setTimeout(()=>this.clr(""),4000)}
+     await this.regain();setTimeout(()=>this.clr(""),4000)}
     catch(e){clog("treadmill","reconnect failed: "+e.message);this.lost()}},1500*this.tries)}
   else{if(run&&!this.userDc)clog("treadmill","gave up reconnecting");this.st("Treadmill disconnected. The belt keeps its last command: use the safety key or console to stop.",true)}},
+ async regain(){await this.cmd([0]);
+  if(window.S&&S&&!S.paused&&!S.hold&&!(this.live.speed>0.4)){await this.cmd([7]);const t=Date.now();while(Date.now()-t<8000&&!(this.live.speed>0.4))await new Promise(r=>setTimeout(r,200))}
+  if(window.S&&S&&this.on()&&!S.paused)await this.set(S.speed,S.incline)},
  resp(v){if(v.getUint8(0)!==0x80)return;const op=v.getUint8(1),res=v.getUint8(2);if(this.wait&&this.wait.op===op){this.wait.ok(res)}},
  cmd(bytes,retry=true){const op=bytes[0],seq=this.last[op]=(this.last[op]||0)+1;
   this.q=this.q.then(()=>new Promise(async ok=>{
    if(!this.cp)return ok(-1);
-   this.wait={op,ok:r=>{clearTimeout(tm);this.wait=null;if(r!==1){this.st("Treadmill answered "+r+" to command "+op,true);clog("treadmill","answered "+r+" to command "+op)}ok(r)}};
+   this.wait={op,ok:r=>{clearTimeout(tm);this.wait=null;if(r!==1){clog("treadmill","answered "+r+" to command "+op);
+     if(r===5&&retry&&(op===2||op===3||op===7||op===8)&&this.cp){this.st("Treadmill refused control, requesting it again…",true);setTimeout(async()=>{await this.cmd([0]);await this.cmd(bytes,false);this.clr("")},100)}
+     else this.st("Treadmill answered "+r+" to command "+op,true)}ok(r)}};
    const tm=setTimeout(()=>{this.wait=null;clog("treadmill","no answer to command "+op);this.st("No answer to command "+op,true);ok(-2);
     if(retry&&(op===2||op===3)&&this.last[op]===seq&&this.cp)setTimeout(()=>{clog("treadmill","retry of command "+op);this.cmd(bytes,false)},300)},3000);
    try{await this.cp.writeValueWithResponse(new Uint8Array(bytes))}catch(e){clearTimeout(tm);this.wait=null;clog("treadmill","write failed: "+e.message);this.st("Write failed: "+e.message,true);ok(-3)}}));return this.q},
