@@ -626,10 +626,13 @@ const HR={dev:null,bpm:null,t:0,tries:0,want:false,
  data(v){const f=v.getUint8(0),b=f&1?v.getUint16(1,true):v.getUint8(1);
   if(b>0&&b<250){this.bpm=b;this.t=Date.now()}else{this.bpm=null}}};
 const hrNow=()=>{if(HR.bpm!=null&&Date.now()-HR.t<5000)return HR.bpm;const t=BLE.live&&BLE.live.hr;return t>0?t:null};
-$("hrcon").onclick=()=>{if(HR.dev&&HR.dev.gatt.connected)HR.disconnect();else HR.connect()};
+// during a workout a tap on the Bluetooth buttons needs a second tap within 5 s (keeps the user gesture that Web Bluetooth needs)
+const ARM={};function guard(k,on,what){if(!(window.S&&S)||S.done)return true;if(ARM[k]&&Date.now()-ARM[k]<5000){ARM[k]=0;BLE.clr("guard");return true}
+ ARM[k]=Date.now();BLE.st(on?`Workout running! Tap ${what} again within 5 s to DISCONNECT. The belt keeps its last command.`:`Workout running. Tap ${what} again within 5 s to connect.`,true,"guard");setTimeout(()=>{if(ARM[k]&&Date.now()-ARM[k]>=4900){ARM[k]=0;BLE.clr("guard")}},5100);return false}
+$("hrcon").onclick=()=>{const on=!!(HR.dev&&HR.dev.gatt.connected);if(!guard("hr",on,"HR"))return;if(on)HR.disconnect();else HR.connect()};
 const am=$("alertmodal");$("alertbtn").onclick=()=>{am.hidden=false};$("alertclose").onclick=()=>{am.hidden=true};
 am.onclick=e=>{if(e.target===am)am.hidden=true};document.addEventListener("keydown",e=>{if(e.key==="Escape")am.hidden=true});
-$("btcon").onclick=()=>{if(BLE.cp&&BLE.dev){BLE.userDc=true;BLE.dev.gatt.disconnect()}else BLE.connect()};
+$("btcon").onclick=()=>{const on=!!(BLE.cp&&BLE.dev);if(!guard("bt",on,"the treadmill icon"))return;if(on){BLE.userDc=true;BLE.dev.gatt.disconnect()}else BLE.connect()};
 
 // ---- workout feedback (RPE, feel, carbs, note) -> log.feedback -> intervals.icu
 const SPEECH_LANG="de-DE";
